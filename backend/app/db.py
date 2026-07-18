@@ -1,13 +1,11 @@
 from collections.abc import AsyncGenerator
 import uuid
 
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Date
+from sqlalchemy import Column, Text, DateTime, Date
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.orm import DeclarativeBase, relationship
+from sqlalchemy.orm import DeclarativeBase
 from datetime import datetime
-from fastapi_users.db import SQLAlchemyUserDatabase, SQLAlchemyBaseUserTableUUID
-from fastapi import Depends
 
 DATABASE_URL = "sqlite+aiosqlite:///./test.db"
 

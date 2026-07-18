@@ -1,7 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Form, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import date, datetime
-from pydantic import BaseModel
 from app.schema import EventCreate
 
 from app.db import Event, get_async_session

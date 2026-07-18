@@ -1,9 +1,6 @@
-from fastapi import FastAPI, Form, Depends, HTTPException, status
-from app.db import Event, create_db_and_tables, get_async_session
-from datetime import date, datetime
+from fastapi import FastAPI
+from app.db import create_db_and_tables
 from app.routers import event
-
-from sqlalchemy.ext.asyncio import AsyncSession
 from contextlib import asynccontextmanager
 
 @asynccontextmanager
