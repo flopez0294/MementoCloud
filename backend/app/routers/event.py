@@ -29,7 +29,6 @@ async def create_event(
     event_in: EventCreate, 
     session: AsyncSession = Depends(get_async_session)
 ):
-    # Tr
     try:
         db_event = Event(**event_in.model_dump())
         
@@ -124,7 +123,6 @@ async def get_events(
     session: AsyncSession = Depends(get_async_session)
 ):
     query = select(Event)
-
     result = await session.execute(query)
     events = result.scalars().all()
     return events
@@ -135,9 +133,7 @@ async def get_search_event(
     session: AsyncSession = Depends(get_async_session)
 ) :
     try:
-        query = select(Event).where(Event.search_id == search_id)
-        result = await session.execute(query)
-        event = result.scalar_one_or_none()
+        event = await find_event(search_id, session)
         
         if not event:
             raise HTTPException(status_code=404, detail="Event not Found")
@@ -154,9 +150,7 @@ async def delete_event(
     session: AsyncSession = Depends(get_async_session)
 ):
     try:
-        query = select(Event).where(Event.id == event_id)
-        result = await session.execute(query)
-        event = result.scalar_one_or_none()
+        event = await find_event(event_id, session, 'id')
         if not event:
             raise HTTPException(status_code=404, detail="Event not found")
         
