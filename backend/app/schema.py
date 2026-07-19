@@ -1,5 +1,6 @@
 from pydantic import BaseModel, field_validator
 from datetime import date
+from uuid import UUID
 
 class EventCreate(BaseModel):
     event_name: str
@@ -22,3 +23,12 @@ class EventCreate(BaseModel):
             raise ValueError("The event name cannot be empty.")
             
         return cleaned
+    
+class GuestEventResponse(BaseModel):
+    search_id: UUID
+    event_name: str
+    event_date: date
+    
+class EventResponse(GuestEventResponse):
+    id: UUID
+    
