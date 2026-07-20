@@ -1,15 +1,15 @@
-from typing import Tuple, Literal, Annotated
-
+from typing import Literal, Annotated
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import JSONResponse
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.schema import EventCreate, EventResponse, GuestEventResponse
 from uuid import UUID
 from pathlib import Path
 
 from app.db import Event, get_async_session
-
+from app.schema import EventCreate, EventResponse, GuestEventResponse
+from app.services.storage import upload_file
 router = APIRouter(prefix="/api/event", tags=["event"])
 
 async def find_event(
@@ -82,6 +82,13 @@ async def upload_media(
                     "reason": "Only image and video files are allowed"
                 })
                 continue
+            
+            storage_key = await run_in_threadpool(
+                upload_file,
+                file.file,
+                event.id,
+                file.filename
+            )
 
             uploaded_files.append({
                 "filename": file.filename,

@@ -31,8 +31,3 @@ app.include_router(event.router)
 @app.get("/")
 def health():
     return { "Health": "good"}
-
-
-
-    
-    
