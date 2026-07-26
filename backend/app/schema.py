@@ -1,6 +1,7 @@
 from pydantic import BaseModel, field_validator
 from datetime import date
 from uuid import UUID
+from fastapi_users import schemas
 
 class EventCreate(BaseModel):
     event_name: str
@@ -32,3 +33,14 @@ class GuestEventResponse(BaseModel):
 class EventResponse(GuestEventResponse):
     id: UUID
     
+    
+class UserRead(schemas.BaseUser[UUID]):
+    pass
+
+
+class UserCreate(schemas.BaseUserCreate):
+    pass
+
+
+class UserUpdate(schemas.BaseUserUpdate):
+    pass
