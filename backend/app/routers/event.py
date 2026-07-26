@@ -7,7 +7,8 @@ from sqlalchemy import select
 from uuid import UUID
 from pathlib import Path
 
-from app.db import Event, get_async_session
+from app.db import Event, User, get_async_session
+from app.users import current_active_user
 from app.schema import EventCreate, EventResponse, GuestEventResponse
 from app.services.storage import upload_file
 router = APIRouter(prefix="/api/event", tags=["event"])
@@ -27,10 +28,11 @@ async def find_event(
 @router.post("")
 async def create_event(
     event_in: EventCreate, 
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_active_user)
 ):
     try:
-        db_event = Event(**event_in.model_dump())
+        db_event = Event(**event_in.model_dump(), user_id=user.id)
         
         session.add(db_event)
         await session.commit()
@@ -127,9 +129,10 @@ async def upload_media(
         
 @router.get("", response_model=list[EventResponse])
 async def get_events(
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_active_user)
 ):
-    query = select(Event)
+    query = select(Event).where(Event.user_id == user.id)
     result = await session.execute(query)
     events = result.scalars().all()
     return events
@@ -154,10 +157,17 @@ async def get_search_event(
 @router.delete("/{event_id}")
 async def delete_event(
     event_id: UUID,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_active_user)
 ):
     try:
-        event = await find_event(event_id, session, 'id')
+        query = select(Event).where(
+            Event.id == event_id,
+            Event.user_id == user.id
+        )
+
+        result = await session.execute(query)
+        event = result.scalar_one_or_none()
         if not event:
             raise HTTPException(status_code=404, detail="Event not found")
         

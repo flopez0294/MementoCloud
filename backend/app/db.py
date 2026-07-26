@@ -15,17 +15,19 @@ class Base(DeclarativeBase):
     pass
 
 class User(SQLAlchemyBaseUserTableUUID, Base):
-    pass
+    events = relationship("Event", back_populates="user", cascade="all, delete-orphan")
 
 class Event(Base):
     __tablename__ = "events"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("user.id"), nullable=False)
     event_name = Column(Text, nullable=False)
     search_id = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True)
     event_date = Column(Date, nullable=False)
     event_created = Column(DateTime, default=datetime.utcnow)
     
+    user = relationship("User", back_populates="events")
     media = relationship("Media", back_populates="event", cascade="all, delete-orphan")
     
 class Media(Base):
