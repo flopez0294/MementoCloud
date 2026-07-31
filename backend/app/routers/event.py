@@ -9,8 +9,9 @@ from pathlib import Path
 
 from app.db import Event, User, get_async_session
 from app.users import current_active_user
-from app.schema import EventCreate, EventResponse, GuestEventResponse
+from app.schema import EventCreate, EventResponse, GuestEventResponse, PasswordVerify
 from app.services.storage import upload_file
+from app.services.guest import current_guest, create_guest_token
 from pwdlib import PasswordHash
 
 password_hash = PasswordHash.recommended()
@@ -45,7 +46,7 @@ async def create_event(
         await session.commit()
         await session.refresh(db_event)
         
-        return {"status": "success", "event_id": str(db_event.id)}
+        return {"status": "success", "event_id": str(db_event.id), "search_id": str(db_event.search_id)}
     except Exception as e:
         # Roll back the transaction if anything goes wrong during commit
         await session.rollback()
@@ -56,18 +57,43 @@ async def create_event(
             detail=f"Database transaction failed: {str(e)}"
         )
         
+@router.post("/{search_id}/verify")
+async def verify_event_password (
+    search_id: UUID,
+    password_verify: PasswordVerify,
+    session: AsyncSession = Depends(get_async_session)
+):
+    event = await find_event(search_id, session)
+
+    if not event:
+        raise HTTPException(status_code=404,detail="Event not found")
+        
+    if not password_hash.verify(password=password_verify.password, hash=event.password_hash):
+        raise HTTPException(status_code=401, detail="Incorrect password")
+    
+    token = create_guest_token(event_id=str(event.id), search_id=str(event.search_id))
+    
+    return {
+        "access_token": token,
+        "token_type": "bearer"
+    }
+        
 @router.post("/{search_id}/upload")
 async def upload_media(
     files: Annotated[
         list[UploadFile], File(description="Multiple files as UploadFile")
     ],
     search_id: UUID,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    guest = Depends(current_guest)
 ):
     try:   
         event = await find_event(search_id, session) 
         if not event:
             raise HTTPException(status_code=404, detail="Event not found")
+        
+        if guest["search_id"] != str(search_id) or guest["event_id"] != str(event.id):
+                raise HTTPException(status_code=403, detail="Guest token does not belong to this event")
         
         uploaded_files = []
         rejected_files = []
