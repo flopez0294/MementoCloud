@@ -11,6 +11,9 @@ from app.db import Event, User, get_async_session
 from app.users import current_active_user
 from app.schema import EventCreate, EventResponse, GuestEventResponse
 from app.services.storage import upload_file
+from pwdlib import PasswordHash
+
+password_hash = PasswordHash.recommended()
 router = APIRouter(prefix="/api/event", tags=["event"])
 
 async def find_event(
@@ -32,7 +35,11 @@ async def create_event(
     user: User = Depends(current_active_user)
 ):
     try:
-        db_event = Event(**event_in.model_dump(), user_id=user.id)
+        db_event = Event(
+            **event_in.model_dump(exclude={"password"}), 
+            password_hash=password_hash.hash(event_in.password),
+            user_id=user.id
+        )
         
         session.add(db_event)
         await session.commit()

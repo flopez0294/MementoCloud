@@ -6,6 +6,7 @@ from fastapi_users import schemas
 class EventCreate(BaseModel):
     event_name: str
     event_date: date
+    password: str
     
     @field_validator("event_date")
     @classmethod
@@ -24,6 +25,16 @@ class EventCreate(BaseModel):
             raise ValueError("The event name cannot be empty.")
             
         return cleaned
+    
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        value = value.strip()
+
+        if len(value) < 6:
+            raise ValueError("Password must be at least 6 characters long.")
+
+        return value
     
 class GuestEventResponse(BaseModel):
     search_id: UUID
@@ -44,3 +55,6 @@ class UserCreate(schemas.BaseUserCreate):
 
 class UserUpdate(schemas.BaseUserUpdate):
     pass
+
+class PasswordVerify(BaseModel):
+    password: str

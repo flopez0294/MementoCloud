@@ -26,6 +26,7 @@ class Event(Base):
     search_id = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True)
     event_date = Column(Date, nullable=False)
     event_created = Column(DateTime, default=datetime.utcnow)
+    password_hash = Column(Text, nullable=False)
     
     user = relationship("User", back_populates="events")
     media = relationship("Media", back_populates="event", cascade="all, delete-orphan")
