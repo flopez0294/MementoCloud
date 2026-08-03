@@ -36,9 +36,11 @@ class Media(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     event_id = Column(UUID(as_uuid=True), ForeignKey("events.id"), nullable=False)
-    url = Column(Text, nullable=False)
+    file_name = Column(Text, nullable=False)
+    storage_key = Column(Text, nullable=False)
     media_type = Column(Enum("image", "video"), nullable=False)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(Enum("pending", "complete"), nullable=False, default="pending")
     
     event = relationship("Event", back_populates="media")
     

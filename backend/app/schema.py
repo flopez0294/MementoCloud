@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, Field
 from datetime import date
 from uuid import UUID
 from fastapi_users import schemas
@@ -40,6 +40,17 @@ class GuestEventResponse(BaseModel):
     search_id: UUID
     event_name: str
     event_date: date
+    
+class FileUploadMetadata(BaseModel):
+    filename: str = Field(..., description="Original name of the file")
+    content_type: str = Field(..., description="MIME type, e.g., 'image/jpeg' or 'video/mp4'")
+    size: int
+
+class PreSignedUrlRequest(BaseModel):
+    files: list[FileUploadMetadata]
+    
+class UploadCompleteRequest(BaseModel):
+    media_id: UUID
     
 class EventResponse(GuestEventResponse):
     id: UUID
