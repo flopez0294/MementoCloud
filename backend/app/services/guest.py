@@ -17,6 +17,16 @@ guest_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/event/{search_id}/veri
 
 
 def create_guest_token(event_id: str, search_id: str):
+    """
+    Creates a JWT token for a guest with access to a specific event.
+
+    Args:
+        event_id (str): The unique identifier of the event the guest can access.
+        search_id (str): The public search identifier associated with the event.
+
+    Returns:
+        str: A signed JWT token for guest access to an event.
+    """
     now = datetime.now(UTC)
     payload = {
         "sub": "guest",
@@ -34,6 +44,19 @@ def create_guest_token(event_id: str, search_id: str):
     )
     
 async def current_guest(token: str = Depends(guest_oauth2_scheme)):
+    """
+    Validates and decodes a guest JWT token.
+
+    Args:
+        token (str): The JWT access token provided by the guest.
+
+    Returns:
+        dict: The decoded JWT payload containing the guest's access information.
+
+    Raises:
+        HTTPException: If the token is expired, invalid, or does not have
+            the required guest role.
+    """
     try:
         payload = jwt.decode(
             token,

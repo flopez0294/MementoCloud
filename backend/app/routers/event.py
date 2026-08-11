@@ -25,6 +25,20 @@ async def find_event(
     session: AsyncSession,
     type: Literal["id", "search_id"] = "search_id",
 ): 
+    """
+    Retrieves an event from the database using either its ID or search ID.
+
+    Args:
+        id (UUID): The UUID used to identify the event.
+        session (AsyncSession): The database session used to execute the query.
+        type (Literal["id", "search_id"], optional): Determines whether to
+            search by the event's primary ID or public search ID.
+            Defaults to "search_id".
+
+    Returns:
+        Event | None: The matching event, or None if no event is found.
+    """
+    
     if type == "id":
         query = select(Event).where(Event.id == id)
     else: 
@@ -38,6 +52,27 @@ async def create_event(
     session: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user)
 ):
+    """
+    Creates a new event for the currently authenticated user.
+
+    Args:
+        event_in (EventCreate): The event information provided by the user,
+            including the event name, date, and password.
+        session (AsyncSession, optional): The database session used to create
+            and persist the event. Defaults to Depends(get_async_session).
+        user (User, optional): The currently authenticated user who owns the
+            event. Defaults to Depends(current_active_user).
+
+    Raises:
+        HTTPException: If an error occurs while creating or saving the event
+            to the database. The transaction is rolled back and a 500 status
+            code is returned.
+
+    Returns:
+        dict: A success response containing the newly created event's ID
+            and public search ID.
+    """
+    
     try:
         db_event = Event(
             **event_in.model_dump(exclude={"password"}), 
@@ -66,6 +101,26 @@ async def verify_event_password (
     password_verify: PasswordVerify,
     session: AsyncSession = Depends(get_async_session)
 ):
+    """
+    Verifies an event password and generates a guest access token.
+
+    Args:
+        search_id (UUID): The public search ID used to identify the event.
+        password_verify (PasswordVerify): The password provided by the guest
+            for verification.
+        session (AsyncSession, optional): The database session used to retrieve
+            the event. Defaults to Depends(get_async_session).
+            
+    Raises:
+        HTTPException: If the event cannot be found, with a 404 status code.
+        HTTPException: If the provided password is incorrect, with a 401
+            status code.
+
+    Returns:
+        dict: A bearer access token that can be used by the guest to access
+            protected event resources.
+    """
+
     event = await find_event(search_id, session)
 
     if not event:
@@ -88,6 +143,39 @@ async def complete_upload(
     session: AsyncSession = Depends(get_async_session),
     guest=Depends(current_guest)
 ):
+    """
+    Verifies a media upload and marks it as complete.
+
+    Args:
+        search_id (UUID): The public search ID used to identify the event.
+        payload (UploadCompleteRequest): Contains the ID of the media record
+            associated with the completed upload.
+        session (AsyncSession, optional): The database session used to retrieve
+            and update the event and media records. Defaults to
+            Depends(get_async_session).
+        guest (dict, optional): The authenticated guest token payload used to
+            verify access to the event. Defaults to Depends(current_guest).
+            
+    Raises:
+        HTTPException: If the event is not found, with a 404 status code.
+        HTTPException: If the guest token does not belong to the event, with
+            a 403 status code.
+        HTTPException: If the media record is not found, with a 404 status code.
+        HTTPException: If the media does not belong to the event, with a
+            403 status code.
+        HTTPException: If the uploaded file does not exist in storage, with
+            a 400 status code.
+        HTTPException: If the uploaded file's content type does not match
+            the expected media type, with a 400 status code.
+        HTTPException: If an unexpected error occurs while processing the
+            upload, with a 500 status code.
+
+    Returns:
+        dict: A success response indicating whether the upload was completed
+            or had already been completed.
+
+    """
+    
     try:
         event = await find_event(search_id, session)
 
@@ -169,6 +257,35 @@ async def upload_media(
     session: AsyncSession = Depends(get_async_session),
     guest = Depends(current_guest)
 ):
+    """
+    Validates media files and generates presigned URLs for direct uploads.
+
+    Args:
+        payload (PreSignedUrlRequest): Contains metadata for the files to be
+            uploaded, including filenames, content types, and file sizes.
+        search_id (UUID): The public search ID used to identify the event.
+        session (AsyncSession, optional): The database session used to create
+            pending media records. Defaults to Depends(get_async_session).
+        guest (dict, optional): The authenticated guest token payload used to
+            verify access to the event. Defaults to Depends(current_guest).
+    
+    Raises:
+        HTTPException: If the request exceeds the maximum number of allowed
+            files, with a 400 status code.
+        HTTPException: If the event cannot be found, with a 404 status code.
+        HTTPException: If the guest token does not belong to the event, with
+            a 403 status code.
+        HTTPException: If all submitted files are rejected, with a 400 status
+            code.
+        HTTPException: If an unexpected error occurs while creating media
+            records or generating presigned URLs, with a 500 status code.
+
+    Returns:
+        dict: A response containing the generated presigned upload URLs and
+            associated media records. If some files are rejected, the response
+            includes both the accepted and rejected files.
+    """
+    
     try:  
         if len(payload.files) > MAX_FILE_COUNT:
             raise HTTPException(status_code=400, detail=f"Maximum of {MAX_FILE_COUNT} files allowed per request.")
@@ -267,6 +384,19 @@ async def get_events(
     session: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user)
 ):
+    """
+    Retrieves all events belonging to the currently authenticated user.
+
+    Args:
+        session (AsyncSession, optional): The database session used to query
+            the user's events. Defaults to Depends(get_async_session).
+        user (User, optional): The currently authenticated user whose events
+            will be retrieved. Defaults to Depends(current_active_user).
+
+    Returns:
+        list[EventResponse]: A list of events owned by the authenticated user.
+            Returns an empty list if the user has no events.
+    """
     query = select(Event).where(Event.user_id == user.id)
     result = await session.execute(query)
     events = result.scalars().all()
@@ -277,6 +407,23 @@ async def get_search_event(
     search_id: UUID,
     session: AsyncSession = Depends(get_async_session)
 ) :
+    """
+    Retrieves an event using its public search ID.
+
+    Args:
+        search_id (UUID): The public search ID used to identify the event.
+        session (AsyncSession, optional): The database session used to retrieve
+            the event. Defaults to Depends(get_async_session).
+
+    Returns:
+        GuestEventResponse: The event information available to guests.
+
+    Raises:
+        HTTPException: If the event cannot be found, with a 404 status code.
+        HTTPException: If an unexpected error occurs while retrieving the event,
+            with a 500 status code.
+    """
+    
     try:
         event = await find_event(search_id, session)
         
@@ -295,6 +442,27 @@ async def delete_event(
     session: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user)
 ):
+    """
+    Deletes an event owned by the currently authenticated user.
+
+    Args:
+        event_id (UUID): The unique ID of the event to delete.
+        session (AsyncSession, optional): The database session used to retrieve
+            and delete the event. Defaults to Depends(get_async_session).
+        user (User, optional): The currently authenticated user. The event must
+            belong to this user to be deleted. Defaults to
+            Depends(current_active_user).
+    
+    Raises:
+        HTTPException: If the event does not exist or does not belong to the
+            authenticated user, with a 404 status code.
+        HTTPException: If an unexpected error occurs while deleting the event,
+            with a 500 status code. The database transaction is rolled back.
+
+    Returns:
+        dict: A success response confirming that the event was deleted.
+    """
+
     try:
         query = select(Event).where(
             Event.id == event_id,

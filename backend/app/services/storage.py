@@ -34,14 +34,28 @@ def create_storage_key(
 ) -> str:
     """
     Creates a unique object key for an uploaded file.
+    
+    Args:
+        event_id (UUID): An event's given ID.
+        filename (str): A media's filename.
 
-    Example:
-    events/550e8400-e29b/uuid4_{name}.jpg
+    Returns:
+        str: storage key for a given media.
     """
-
     return f"events/{event_id}/{uuid4()}_{filename}"
 
 def generate_put_presign_url(key: str, content_type: str):
+    """
+    Generates a presign url for image uploading from the frontend.
+
+    Args:
+        key (str): The storage key where the media will be uploaded.
+        content_type (str): The MIME type of the media being uploaded.
+
+    Returns:
+        str: A presigned URL that allows the frontend to upload the media
+            directly to the storage bucket for a limited time.
+    """
     put_url = s3.generate_presigned_url(
         'put_object',
         Params={
@@ -54,6 +68,22 @@ def generate_put_presign_url(key: str, content_type: str):
     return put_url
 
 def get_object_metadata(storage_key: str):
+    """
+    Retrieves metadata for a media object to verify that it exists
+    in the storage bucket.
+
+    Args:
+        storage_key (str): The storage key of the media object.
+
+    Raises:
+        RuntimeError: If the storage service fails to retrieve the object's
+            metadata for a reason other than the object not existing.
+
+    Returns:
+        Dict | None: A dictionary containing the object's size, content type,
+            ETag, and last modified timestamp, or None if the object does
+            not exist.
+    """
     try:
         response = s3.head_object(
             Bucket=R2_BUCKET_NAME,
@@ -76,31 +106,4 @@ def get_object_metadata(storage_key: str):
 
         raise RuntimeError(
             f"Failed to check object metadata: {e}"
-        )
-
-def upload_file(
-    file_object,
-    event_id: UUID,
-    filename: str,
-) -> str:
-    """
-    Uploads a file to Cloudflare R2.
-
-    Returns:
-        The storage key.
-    """
-
-    try:
-        key = create_storage_key(event_id=event_id, filename=filename)
-        s3.upload_fileobj(
-            file_object,
-            R2_BUCKET_NAME,
-            key,
-        )
-
-        return key
-
-    except ClientError as e:
-        raise RuntimeError(
-            f"Failed to upload file: {e}"
         )
