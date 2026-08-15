@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from uuid import UUID
 from pathlib import Path
+from datetime import date
+from mimetypes import guess_type
 
 from app.db import Event, User, Media, get_async_session
 from app.users import current_active_user
@@ -275,6 +277,8 @@ async def upload_media(
         HTTPException: If the event cannot be found, with a 404 status code.
         HTTPException: If the guest token does not belong to the event, with
             a 403 status code.
+        HTTPException: If it is not the current date for the event, with
+            a 403 status code.
         HTTPException: If all submitted files are rejected, with a 400 status
             code.
         HTTPException: If an unexpected error occurs while creating media
@@ -296,6 +300,9 @@ async def upload_media(
         
         if guest["search_id"] != str(search_id) or guest["event_id"] != str(event.id):
                 raise HTTPException(status_code=403, detail="Guest token does not belong to this event")
+            
+        if date.today() != event.event_date:
+                    raise HTTPException(status_code=403, detail="Uploads are only allowed on the event date")
         
         uploaded_files = []
         rejected_files = []
@@ -307,6 +314,15 @@ async def upload_media(
             if not file.filename:
                 continue
             content_type = file.content_type
+            
+            guessed_type, _ = guess_type(file.filename)
+            if guessed_type and guessed_type.lower() != file.content_type.strip().lower():
+                rejected_files.append({
+                    "filename": file.filename,
+                    "reason": "File extension does not match the content type provided"
+                })
+                continue
+
 
             if content_type not in allowed_image_types and content_type not in allowed_video_types:
                 rejected_files.append({
