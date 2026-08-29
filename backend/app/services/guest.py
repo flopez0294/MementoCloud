@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta, UTC
 from fastapi.security import OAuth2PasswordBearer
 from fastapi import HTTPException, Depends
+from ..schema import GuestTokenPayload
 import jwt
 import os
 
@@ -43,7 +44,7 @@ def create_guest_token(event_id: str, search_id: str):
         algorithm=ALGORITHM
     )
     
-async def current_guest(token: str = Depends(guest_oauth2_scheme)):
+async def current_guest(token: str = Depends(guest_oauth2_scheme)) -> GuestTokenPayload:
     """
     Validates and decodes a guest JWT token.
 
@@ -51,7 +52,7 @@ async def current_guest(token: str = Depends(guest_oauth2_scheme)):
         token (str): The JWT access token provided by the guest.
 
     Returns:
-        dict: The decoded JWT payload containing the guest's access information.
+        GuestTokenPayload: The validated guest token payload.
 
     Raises:
         HTTPException: If the token is expired, invalid, or does not have
@@ -67,7 +68,7 @@ async def current_guest(token: str = Depends(guest_oauth2_scheme)):
         if payload.get("role") != "guest":
             raise HTTPException(status_code=401, detail="Invalid guest token")
 
-        return payload
+        return GuestTokenPayload(**payload)
 
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Guest token expired")

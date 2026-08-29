@@ -1,7 +1,8 @@
 from pydantic import BaseModel, field_validator, Field
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 from fastapi_users import schemas
+from typing import Literal
 
 class EventCreate(BaseModel):
     event_name: str
@@ -35,6 +36,14 @@ class EventCreate(BaseModel):
             raise ValueError("Password must be at least 6 characters long.")
 
         return value
+    
+class GuestTokenPayload(BaseModel):
+    sub: Literal["guest"]
+    event_id: str
+    search_id: str
+    role: Literal["guest"]
+    iat: datetime
+    exp: datetime
     
 class GuestEventResponse(BaseModel):
     search_id: UUID

@@ -11,7 +11,7 @@ from mimetypes import guess_type
 
 from app.db import Event, User, Media, get_async_session
 from app.users import current_active_user
-from app.schema import EventCreate, EventResponse, GuestEventResponse, PasswordVerify, PreSignedUrlRequest, UploadCompleteRequest
+from app.schema import EventCreate, EventResponse, GuestTokenPayload, GuestEventResponse, PasswordVerify, PreSignedUrlRequest, UploadCompleteRequest
 from app.services.storage import create_storage_key, generate_put_presign_url, get_object_metadata, generate_get_presign_url
 from app.services.guest import current_guest, create_guest_token
 from pwdlib import PasswordHash
@@ -143,7 +143,7 @@ async def complete_upload(
     search_id: UUID,
     payload: UploadCompleteRequest,
     session: AsyncSession = Depends(get_async_session),
-    guest=Depends(current_guest)
+    guest: GuestTokenPayload = Depends(current_guest)
 ):
     """
     Verifies a media upload and marks it as complete.
@@ -155,7 +155,7 @@ async def complete_upload(
         session (AsyncSession, optional): The database session used to retrieve
             and update the event and media records. Defaults to
             Depends(get_async_session).
-        guest (dict, optional): The authenticated guest token payload used to
+        guest (GuestTokenPayload): The authenticated guest token payload used to
             verify access to the event. Defaults to Depends(current_guest).
             
     Raises:
@@ -188,8 +188,8 @@ async def complete_upload(
             )
 
         if (
-            guest["search_id"] != str(search_id)
-            or guest["event_id"] != str(event.id)
+            guest.search_id != str(search_id)
+            or guest.event_id != str(event.id)
         ):
             raise HTTPException(
                 status_code=403,
@@ -257,7 +257,7 @@ async def upload_media(
     payload: PreSignedUrlRequest,
     search_id: UUID,
     session: AsyncSession = Depends(get_async_session),
-    guest = Depends(current_guest)
+    guest: GuestTokenPayload = Depends(current_guest)
 ):
     """
     Validates media files and generates presigned URLs for direct uploads.
@@ -268,7 +268,7 @@ async def upload_media(
         search_id (UUID): The public search ID used to identify the event.
         session (AsyncSession, optional): The database session used to create
             pending media records. Defaults to Depends(get_async_session).
-        guest (dict, optional): The authenticated guest token payload used to
+        guest (GuestTokenPayload): The authenticated guest token payload used to
             verify access to the event. Defaults to Depends(current_guest).
     
     Raises:
@@ -298,7 +298,7 @@ async def upload_media(
         if not event:
             raise HTTPException(status_code=404, detail="Event not found")
         
-        if guest["search_id"] != str(search_id) or guest["event_id"] != str(event.id):
+        if guest.search_id != str(search_id) or guest.event_id != str(event.id):
                 raise HTTPException(status_code=403, detail="Guest token does not belong to this event")
             
         if date.today() != event.event_date:
@@ -421,7 +421,8 @@ async def get_events(
 @router.get("/{search_id}", response_model=GuestEventResponse)
 async def get_search_event(
     search_id: UUID,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    guest: GuestTokenPayload = Depends(current_guest)
 ) :
     """
     Retrieves an event using its public search ID.
@@ -430,6 +431,8 @@ async def get_search_event(
         search_id (UUID): The public search ID used to identify the event.
         session (AsyncSession, optional): The database session used to retrieve
             the event. Defaults to Depends(get_async_session).
+        guest (GuestTokenPayload): The authenticated guest token payload used to
+            verify access to the event. Defaults to Depends(current_guest).
 
     Returns:
         GuestEventResponse: The event information available to guests.
@@ -441,6 +444,12 @@ async def get_search_event(
     """
     
     try:
+        if guest.search_id != str(search_id):
+            raise HTTPException(
+                status_code=403,
+                detail="Guest token does not belong to this event"
+            )
+        
         event = await find_event(search_id, session)
         
         if not event:
