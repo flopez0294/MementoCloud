@@ -46,7 +46,7 @@ def create_storage_key(
 
 def generate_put_presign_url(key: str, content_type: str):
     """
-    Generates a presign url for image uploading from the frontend.
+    Generates a presigned url for image uploading from the frontend.
 
     Args:
         key (str): The storage key where the media will be uploaded.
@@ -66,6 +66,27 @@ def generate_put_presign_url(key: str, content_type: str):
         ExpiresIn=600
     )
     return put_url
+
+def generate_get_presign_url(key: str):
+    """
+    Generates a presigned URL for retrieving an object from the storage bucket.
+
+    Args:
+        key (str): The storage key where the media is uploaded.
+
+    Returns:
+        str: A presigned URL that allows the frontend to retrieve the media
+            directly from the storage bucket for a limited time.
+    """
+    get_url = s3.generate_presigned_url(
+        "get_object",
+        Params={
+            "Bucket": R2_BUCKET_NAME,
+            "Key": key
+        },
+        ExpiresIn=1800
+    )
+    return get_url
 
 def get_object_metadata(storage_key: str):
     """

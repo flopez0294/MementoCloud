@@ -12,7 +12,7 @@ from mimetypes import guess_type
 from app.db import Event, User, Media, get_async_session
 from app.users import current_active_user
 from app.schema import EventCreate, EventResponse, GuestEventResponse, PasswordVerify, PreSignedUrlRequest, UploadCompleteRequest
-from app.services.storage import create_storage_key, generate_put_presign_url, get_object_metadata
+from app.services.storage import create_storage_key, generate_put_presign_url, get_object_metadata, generate_get_presign_url
 from app.services.guest import current_guest, create_guest_token
 from pwdlib import PasswordHash
 
@@ -445,8 +445,18 @@ async def get_search_event(
         
         if not event:
             raise HTTPException(status_code=404, detail="Event not Found")
-        
-        return event
+
+        result = await session.execute(select(Media).where(Media.event_id == event.id, Media.status == "complete"))
+        media = result.scalars().all()
+        media_urls = [generate_get_presign_url(m.storage_key) for m in media]
+
+
+        return GuestEventResponse(
+            search_id=event.search_id,
+            event_name=event.event_name,
+            event_date=event.event_date,
+            media=media_urls
+        )
     except HTTPException:
         raise
     except Exception as e:

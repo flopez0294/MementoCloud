@@ -40,6 +40,7 @@ class GuestEventResponse(BaseModel):
     search_id: UUID
     event_name: str
     event_date: date
+    media: list[str]
     
 class FileUploadMetadata(BaseModel):
     filename: str = Field(..., description="Original name of the file")
@@ -52,8 +53,11 @@ class PreSignedUrlRequest(BaseModel):
 class UploadCompleteRequest(BaseModel):
     media_id: UUID
     
-class EventResponse(GuestEventResponse):
+class EventResponse(BaseModel):
     id: UUID
+    search_id: UUID
+    event_name: str
+    event_date: date
     
     
 class UserRead(schemas.BaseUser[UUID]):
