@@ -88,6 +88,21 @@ def generate_get_presign_url(key: str):
     )
     return get_url
 
+def delete_object(storage_key: str):
+    """
+    Deletes a media object from the storage bucket.
+
+    Args:
+        storage_key (str): The storage key of the media object.
+
+    Raises:
+        RuntimeError: If the storage service fails to delete the object.
+    """
+    try:
+        s3.delete_object(Bucket=R2_BUCKET_NAME, Key=storage_key)
+    except ClientError as e:
+        raise RuntimeError(f"Failed to delete object from storage: {e}") from e
+
 def get_object_metadata(storage_key: str):
     """
     Retrieves metadata for a media object to verify that it exists
@@ -119,12 +134,4 @@ def get_object_metadata(storage_key: str):
         }
 
     except ClientError as e:
-        error_code = e.response["Error"]["Code"]
-
-        # Object does not exist
-        if error_code in ("404", "NoSuchKey"):
-            return None
-
-        raise RuntimeError(
-            f"Failed to check object metadata: {e}"
-        )
+        raise RuntimeError(f"Failed to delete object from storage: {e}") from e

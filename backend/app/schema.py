@@ -50,6 +50,7 @@ class GuestEventResponse(BaseModel):
     event_name: str
     event_date: date
     media: list[str]
+    media_ids: list[UUID]
     
 class FileUploadMetadata(BaseModel):
     filename: str = Field(..., description="Original name of the file")

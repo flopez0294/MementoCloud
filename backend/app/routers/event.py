@@ -1,18 +1,17 @@
-from typing import Literal, Annotated
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from typing import Literal
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from uuid import UUID
-from pathlib import Path
 from datetime import date
 from mimetypes import guess_type
 
 from app.db import Event, User, Media, get_async_session
 from app.users import current_active_user
 from app.schema import EventCreate, EventResponse, GuestTokenPayload, GuestEventResponse, PasswordVerify, PreSignedUrlRequest, UploadCompleteRequest
-from app.services.storage import create_storage_key, generate_put_presign_url, get_object_metadata, generate_get_presign_url
+from app.services.storage import create_storage_key, generate_put_presign_url, get_object_metadata, generate_get_presign_url, delete_object
 from app.services.guest import current_guest, create_guest_token
 from pwdlib import PasswordHash
 
@@ -250,7 +249,10 @@ async def complete_upload(
 
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to complete upload"
+        ) from e
         
 @router.post("/{search_id}/upload")
 async def upload_media(
@@ -393,7 +395,10 @@ async def upload_media(
         raise
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to generate links"
+        ) from e
 
 @router.get("", response_model=list[EventResponse])
 async def get_events(
@@ -444,32 +449,37 @@ async def get_search_event(
     """
     
     try:
-        if guest.search_id != str(search_id):
+        event = await find_event(search_id, session)
+
+        if not event:
+            raise HTTPException(status_code=404, detail="Event not found")
+
+        if (
+            guest.search_id != str(search_id)
+            or guest.event_id != str(event.id)
+        ):
             raise HTTPException(
                 status_code=403,
                 detail="Guest token does not belong to this event"
             )
-        
-        event = await find_event(search_id, session)
-        
-        if not event:
-            raise HTTPException(status_code=404, detail="Event not Found")
 
         result = await session.execute(select(Media).where(Media.event_id == event.id, Media.status == "complete"))
         media = result.scalars().all()
         media_urls = [generate_get_presign_url(m.storage_key) for m in media]
+        media_ids = [m.id for m in media]
 
 
         return GuestEventResponse(
             search_id=event.search_id,
             event_name=event.event_name,
             event_date=event.event_date,
-            media=media_urls
+            media=media_urls,
+            media_ids=media_ids
         )
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to search event")
         
 @router.delete("/{event_id}")
 async def delete_event(
@@ -509,6 +519,14 @@ async def delete_event(
         if not event:
             raise HTTPException(status_code=404, detail="Event not found")
         
+        query = select(Media).where(
+            Media.event_id == event.id
+        )
+        result = await session.execute(query)
+        media_files = result.scalars().all()
+        for media in media_files:
+            delete_object(media.storage_key)
+        
         await session.delete(event)
         await session.commit()
         
@@ -517,6 +535,91 @@ async def delete_event(
     except HTTPException:
         raise
     
+    except RuntimeError as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to delete event media"
+        ) from e
+
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to delete event"
+        ) from e
+    
+@router.delete("/{event_id}/media/{media_id}")
+async def delete_media(
+    event_id: UUID,
+    media_id: UUID, 
+    user: User = Depends(current_active_user),
+    session: AsyncSession  = Depends(get_async_session)
+):
+    """
+    Deletes a media file from both R2 storage and the database.
+
+    Args:
+        event_id (UUID): The unique ID of the event containing the media.
+        media_key (UUID): The unique ID of the media object to delete.
+        user (User, optional): The currently authenticated user. The user must
+            own the event to delete its media. Defaults to Depends(current_active_user).
+        session (AsyncSession, optional): The database session used to retrieve
+            the event and media record and delete the media. Defaults to Depends(get_async_session).
+
+    Raises:
+        HTTPException: If the event does not exist, with a 404 status code.
+        HTTPException: If the event owner is not the authenticated user, with a
+            403 status code.
+        HTTPException: If the media does not exist or does not belong to the
+            specified event, with a 404 status code.
+        HTTPException: If the media cannot be deleted from storage, with a 500
+            status code.
+        HTTPException: If an unexpected error occurs while deleting the media,
+            with a 500 status code. The database transaction is rolled back.
+
+    Returns:
+        dict: A success response confirming that the media was deleted.
+    """
+    try:
+        event = await find_event(event_id, session, "id")
+        
+        if not event:
+            raise HTTPException(status_code=404, detail="Event not found")
+        
+        if event.user_id != user.id:
+            raise HTTPException(status_code=403, detail="Not authorized for deletion")
+        
+        query = select(Media).where(Media.id == media_id, Media.event_id == event.id)
+        result = await session.execute(query)
+        media = result.scalar_one_or_none()
+        
+        if not media: 
+            raise HTTPException(status_code=404 , detail="Media does not exist")
+                                
+        delete_object(media.storage_key)
+        
+        await session.delete(media)
+        await session.commit()
+        
+        return {
+            "success": True,
+            "message": "Media deleted"
+        }
+        
+    except HTTPException:
+        raise
+    
+    except RuntimeError as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to delete media from storage"
+        ) from e
+
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to delete media"
+        ) from e
