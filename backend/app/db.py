@@ -3,7 +3,7 @@ import uuid
 
 from fastapi import Depends
 from fastapi_users.db import SQLAlchemyBaseUserTableUUID, SQLAlchemyUserDatabase
-from sqlalchemy import Column, Text, DateTime, Date, ForeignKey, Enum
+from sqlalchemy import BigInteger, Column, Text, DateTime, Date, ForeignKey, Enum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, relationship
@@ -27,6 +27,9 @@ class Event(Base):
     event_date = Column(Date, nullable=False)
     event_created = Column(DateTime, default=datetime.utcnow)
     password_hash = Column(Text, nullable=False)
+    storage_limit = Column(BigInteger, default=1024 * 1024 * 1024) 
+    storage_used = Column(BigInteger, default=0)
+    reserved_storage = Column(BigInteger, default=0)
     
     user = relationship("User", back_populates="events")
     media = relationship("Media", back_populates="event", cascade="all, delete-orphan")
@@ -41,6 +44,8 @@ class Media(Base):
     media_type = Column(Enum("image", "video"), nullable=False)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
     status = Column(Enum("pending", "complete"), nullable=False, default="pending")
+    file_size = Column(BigInteger, nullable=False)
+    content_type = Column(Text, nullable=False)
     
     event = relationship("Event", back_populates="media")
     

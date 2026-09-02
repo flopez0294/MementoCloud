@@ -78,7 +78,7 @@ async def create_event(
         db_event = Event(
             **event_in.model_dump(exclude={"password"}), 
             password_hash=password_hash.hash(event_in.password),
-            user_id=user.id
+            user_id=user.id,
         )
         
         session.add(db_event)
@@ -166,6 +166,8 @@ async def complete_upload(
             403 status code.
         HTTPException: If the uploaded file does not exist in storage, with
             a 400 status code.
+        HTTPException: If the uploaded file size does not match the expected
+            size, with a 400 status code.
         HTTPException: If the uploaded file's content type does not match
             the expected media type, with a 400 status code.
         HTTPException: If an unexpected error occurs while processing the
@@ -223,6 +225,18 @@ async def complete_upload(
                 detail="File not uploaded"
             )
 
+        if metadata["content_length"] != media.file_size:
+            raise HTTPException(
+                status_code=400,
+                detail="Uploaded file size does not match expected size"
+            )
+
+        if metadata["content_type"] != media.content_type:
+            raise HTTPException(
+                status_code=400,
+                detail="Uploaded file content type does not match expected type"
+            )
+
         if media.media_type == "image" and not metadata["content_type"].startswith("image/"):
             raise HTTPException(
                 status_code=400,
@@ -236,6 +250,9 @@ async def complete_upload(
             )
 
         media.status = "complete"
+
+        event.reserved_storage -= media.file_size
+        event.storage_used += media.file_size
 
         await session.commit()
 
@@ -281,8 +298,12 @@ async def upload_media(
             a 403 status code.
         HTTPException: If it is not the current date for the event, with
             a 403 status code.
+        HTTPException: If the event's storage limit is exceeded, with a 413
+            status code.
         HTTPException: If all submitted files are rejected, with a 400 status
             code.
+        HTTPException: If the event's available storage limit is exceeded, with 
+            a 413 status code.
         HTTPException: If an unexpected error occurs while creating media
             records or generating presigned URLs, with a 500 status code.
 
@@ -306,7 +327,7 @@ async def upload_media(
         if date.today() != event.event_date:
                     raise HTTPException(status_code=403, detail="Uploads are only allowed on the event date")
         
-        uploaded_files = []
+        accepted_files = []
         rejected_files = []
 
         allowed_image_types = {"image/jpeg", "image/jpg", "image/png", "image/webp", "image/svg+xml", "image/heic"}
@@ -332,41 +353,102 @@ async def upload_media(
                     "reason": "Only image and video files are allowed"
                 })
                 continue
-            
-            storage_key =  create_storage_key(event.id, file.filename)
-            
-            media = Media(
-                event_id=event.id,
-                file_name=file.filename,
-                storage_key=storage_key,
-                media_type=(
-                    "image"
-                    if file.content_type.startswith("image/")
-                    else "video"
-                ),
-                status="pending"
+
+            if content_type.startswith("image/"):
+                if file.size > MAX_IMAGE_SIZE:
+                    rejected_files.append({
+                        "filename": file.filename,
+                        "reason": "Image exceeds maximum size"
+                    })
+                    continue
+
+            elif content_type.startswith("video/"):
+                if file.size > MAX_VIDEO_SIZE:
+                    rejected_files.append({
+                        "filename": file.filename,
+                        "reason": "Video exceeds maximum size"
+                    })
+                    continue
+
+            if file.size <= 0:
+                rejected_files.append({
+                    "filename": file.filename,
+                    "reason": "File cannot be empty"
+                })
+                continue
+
+            accepted_files.append(file)
+
+        if not accepted_files:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": "All files were rejected",
+                    "rejected_files": rejected_files
+                }
             )
-            
-            session.add(media)
-            await session.flush()
-            
-            presigned_url = await run_in_threadpool(
-                            generate_put_presign_url,
-                            storage_key,
-                            content_type
-                        )
-            
-            uploaded_files.append({
-                            "id": media.id,
-                            "filename": file.filename,
-                            "content_type": file.content_type,
-                            "uploadURL": presigned_url
-                        })
-            
-        if uploaded_files:
+
+        
+
+        requested_storage = sum(file.size for file in accepted_files)
+
+        available_storage = event.storage_limit - event.storage_used - event.reserved_storage
+
+        if requested_storage > available_storage:
+            raise HTTPException(
+                status_code=413,
+                detail="Event storage limit exceeded"
+            )
+
+        event.reserved_storage += requested_storage
+        await session.flush()
+
+        uploaded_files = []
+
+        try:
+            for file in accepted_files:
+                storage_key = create_storage_key(
+                    event.id,
+                    file.filename
+                )
+
+                media = Media(
+                    event_id=event.id,
+                    file_name=file.filename,
+                    storage_key=storage_key,
+                    file_size=file.size,
+                    content_type=file.content_type,
+                    media_type=(
+                        "image"
+                        if file.content_type.startswith("image/")
+                        else "video"
+                    ),
+                    status="pending"
+                )
+
+                session.add(media)
+                await session.flush()
+
+                presigned_url = await run_in_threadpool(
+                    generate_put_presign_url,
+                    storage_key,
+                    file.content_type
+                )
+
+                uploaded_files.append({
+                    "id": media.id,
+                    "filename": file.filename,
+                    "content_type": file.content_type,
+                    "uploadURL": presigned_url
+                })
+
             await session.commit()
+
+        except Exception:
+            await session.rollback()
+            raise
             
-        if rejected_files and uploaded_files:
+        if rejected_files:
             return JSONResponse(
                 status_code=207,
                 content={
@@ -376,28 +458,20 @@ async def upload_media(
                 }
             )
 
-        elif rejected_files:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "message": "Some files were rejected",
-                    "rejected_files": rejected_files
-                }
-            )
-
         return {
             "success": True,
             "message": "Upload URLs generated",
             "media": uploaded_files
         }
-    
+
     except HTTPException:
         raise
+
     except Exception as e:
         await session.rollback()
         raise HTTPException(
             status_code=500,
-            detail="Failed to generate links"
+            detail="Failed to generate upload links"
         ) from e
 
 @router.get("", response_model=list[EventResponse])
@@ -598,6 +672,12 @@ async def delete_media(
             raise HTTPException(status_code=404 , detail="Media does not exist")
                                 
         delete_object(media.storage_key)
+
+        if media.status == "complete":
+            event.storage_used -= media.file_size
+
+        elif media.status == "pending":
+            event.reserved_storage -= media.file_size
         
         await session.delete(media)
         await session.commit()

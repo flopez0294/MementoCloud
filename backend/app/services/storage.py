@@ -127,7 +127,7 @@ def get_object_metadata(storage_key: str):
         )
 
         return {
-            "size": response.get("ContentLength"),
+            "content_length": response.get("ContentLength"),
             "content_type": response.get("ContentType"),
             "etag": response.get("ETag"),
             "last_modified": response.get("LastModified"),
