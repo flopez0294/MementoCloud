@@ -5,7 +5,8 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from uuid import UUID
-from datetime import date
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from mimetypes import guess_type
 
 from app.db import Event, User, Media, get_async_session
@@ -324,7 +325,7 @@ async def upload_media(
         if guest.search_id != str(search_id) or guest.event_id != str(event.id):
                 raise HTTPException(status_code=403, detail="Guest token does not belong to this event")
             
-        if date.today() != event.event_date:
+        if datetime.now(ZoneInfo(event.timezone)).date() != event.event_date:
                     raise HTTPException(status_code=403, detail="Uploads are only allowed on the event date")
         
         accepted_files = []

@@ -1,5 +1,6 @@
-from pydantic import BaseModel, field_validator, Field
+from pydantic import BaseModel, field_validator, Field, model_validator
 from datetime import date, datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from uuid import UUID
 from fastapi_users import schemas
 from typing import Literal
@@ -7,15 +8,8 @@ from typing import Literal
 class EventCreate(BaseModel):
     event_name: str
     event_date: date
+    timezone: str
     password: str
-    
-    @field_validator("event_date")
-    @classmethod
-    def ensure_date_is_today_or_future(cls, value: date) -> date:
-        # Compare user input to the current calendar date
-        if value < date.today():
-            raise ValueError("The event date must be today or a future date.")
-        return value
     
     @field_validator("event_name")
     @classmethod
@@ -27,6 +21,16 @@ class EventCreate(BaseModel):
             
         return cleaned
     
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, value: str) -> str:
+        value = value.strip()
+        try:
+            ZoneInfo(value)  # Ensure it's a valid IANA timezone string
+        except ZoneInfoNotFoundError:
+            raise ValueError(f"'{value}' is not a valid IANA time zone.")
+        return value
+    
     @field_validator("password")
     @classmethod
     def validate_password(cls, value: str) -> str:
@@ -36,6 +40,17 @@ class EventCreate(BaseModel):
             raise ValueError("Password must be at least 6 characters long.")
 
         return value
+    
+    @model_validator(mode="after")
+    def ensure_date_is_today_or_future(self) -> "EventCreate":
+        # Get the current calendar date inside the user's specific target timezone
+    
+        target_tz = ZoneInfo(self.timezone)
+        today_in_tz = datetime.now(target_tz).date()
+
+        if self.event_date < today_in_tz:
+            raise ValueError("The event date must be today or a future date in your timezone.")
+        return self
     
 class GuestTokenPayload(BaseModel):
     sub: Literal["guest"]

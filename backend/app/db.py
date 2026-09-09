@@ -7,7 +7,7 @@ from sqlalchemy import BigInteger, Column, Text, DateTime, Date, ForeignKey, Enu
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, relationship
-from datetime import datetime
+from datetime import datetime, timezone
 
 DATABASE_URL = "sqlite+aiosqlite:///./test.db"
 
@@ -25,11 +25,12 @@ class Event(Base):
     event_name = Column(Text, nullable=False)
     search_id = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True)
     event_date = Column(Date, nullable=False)
-    event_created = Column(DateTime, default=datetime.utcnow)
+    event_created = Column(DateTime, default=datetime.now(timezone.utc))
     password_hash = Column(Text, nullable=False)
     storage_limit = Column(BigInteger, default=1024 * 1024 * 1024) 
     storage_used = Column(BigInteger, default=0)
     reserved_storage = Column(BigInteger, default=0)
+    timezone = Column(Text, nullable=False)
     
     user = relationship("User", back_populates="events")
     media = relationship("Media", back_populates="event", cascade="all, delete-orphan")
