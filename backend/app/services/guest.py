@@ -12,7 +12,7 @@ GUEST_SECRET = os.getenv("GUEST_SECRET")
 ALGORITHM = "HS256"
 
 if not GUEST_SECRET:
-    raise ValueError("GUEST_SECRET environment variable is not set")
+    raise EnvironmentError("The GUEST_SECRET environment variable is not set.")
 
 guest_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/event/{search_id}/verify")
 
