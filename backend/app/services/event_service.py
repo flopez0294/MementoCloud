@@ -58,3 +58,31 @@ async def delete_event_data(
 	await session.delete(event)
 	await session.commit()
 	
+ 
+async def delete_media_data(
+    event: Event,
+	media: Media,
+	session: AsyncSession,
+):
+    """
+    Deletes a media file from storage and the database.
+
+    Args:
+        event (Event): The event containing the media file.
+        media (Media): The media file to be deleted.
+        session (AsyncSession): The database session used to delete the media
+            record and update the event's storage usage.
+
+    Raises:
+        RuntimeError: If the media object cannot be deleted from storage.
+        Exception: If an unexpected error occurs while deleting the media.
+    """
+    delete_object(media.storage_key)
+    
+    if media.status == "complete":
+        event.storage_used = max(0, event.storage_used - media.file_size)
+    elif media.status == "pending":
+        event.reserved_storage = max(0, event.reserved_storage - media.file_size)
+        
+    await session.delete(media)
+    await session.commit()

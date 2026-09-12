@@ -11,7 +11,7 @@ from mimetypes import guess_type
 from app.db import Event, User, Media, get_async_session
 from app.users import current_active_user
 from app.schema import EventCreate, EventResponse, GuestTokenPayload, GuestEventResponse, PasswordVerify, PreSignedUrlRequest, UploadCompleteRequest
-from app.services.event_service import delete_event_data, find_event
+from app.services.event_service import delete_event_data, delete_media_data, find_event
 from app.services.storage import create_storage_key, generate_put_presign_url, get_object_metadata, generate_get_presign_url, delete_object
 from app.services.guest import current_guest, create_guest_token
 from pwdlib import PasswordHash
@@ -638,16 +638,7 @@ async def delete_media(
         if not media: 
             raise HTTPException(status_code=404 , detail="Media does not exist")
                                 
-        delete_object(media.storage_key)
-
-        if media.status == "complete":
-            event.storage_used = max(0, event.storage_used - media.file_size)
-
-        elif media.status == "pending":
-            event.reserved_storage = max(0, event.reserved_storage - media.file_size)
-        
-        await session.delete(media)
-        await session.commit()
+        await delete_media_data(event, media, session)
         
         return {
             "success": True,
