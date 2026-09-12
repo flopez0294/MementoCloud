@@ -16,8 +16,8 @@ load_dotenv()
 
 SECRET = os.getenv("FASTAPI_USERS_SECRET")
 
-if SECRET == None:
-    raise ValueError("FASTAPI_USERS_SECRET environment variable is not set")
+if not SECRET:
+    raise EnvironmentError("The FASTAPI_USERS_SECRET environment variable is not set.")
 
 
 class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
