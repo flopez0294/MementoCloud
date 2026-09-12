@@ -8,8 +8,14 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, relationship
 from datetime import datetime, timezone
+from dotenv import load_dotenv
+import os
 
-DATABASE_URL = "sqlite+aiosqlite:///./test.db"
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise EnvironmentError("The DATABASE_URL environment variable was not given.")
 
 class Base(DeclarativeBase):
     pass
