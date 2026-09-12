@@ -1,4 +1,3 @@
-from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.concurrency import run_in_threadpool
@@ -12,6 +11,7 @@ from mimetypes import guess_type
 from app.db import Event, User, Media, get_async_session
 from app.users import current_active_user
 from app.schema import EventCreate, EventResponse, GuestTokenPayload, GuestEventResponse, PasswordVerify, PreSignedUrlRequest, UploadCompleteRequest
+from app.services.event_service import delete_event_data, find_event
 from app.services.storage import create_storage_key, generate_put_presign_url, get_object_metadata, generate_get_presign_url, delete_object
 from app.services.guest import current_guest, create_guest_token
 from pwdlib import PasswordHash
@@ -22,31 +22,6 @@ MAX_VIDEO_SIZE = 200 * 1024 * 1024
 password_hash = PasswordHash.recommended()
 router = APIRouter(prefix="/api/event", tags=["event"])
 
-async def find_event(
-    id: UUID,
-    session: AsyncSession,
-    type: Literal["id", "search_id"] = "search_id",
-): 
-    """
-    Retrieves an event from the database using either its ID or search ID.
-
-    Args:
-        id (UUID): The UUID used to identify the event.
-        session (AsyncSession): The database session used to execute the query.
-        type (Literal["id", "search_id"], optional): Determines whether to
-            search by the event's primary ID or public search ID.
-            Defaults to "search_id".
-
-    Returns:
-        Event | None: The matching event, or None if no event is found.
-    """
-    
-    if type == "id":
-        query = select(Event).where(Event.id == id)
-    else: 
-        query = select(Event).where(Event.search_id == id)
-    result = await session.execute(query)
-    return result.scalar_one_or_none()
 
 @router.post("")
 async def create_event(
@@ -593,17 +568,8 @@ async def delete_event(
         event = result.scalar_one_or_none()
         if not event:
             raise HTTPException(status_code=404, detail="Event not found")
-        
-        query = select(Media).where(
-            Media.event_id == event.id
-        )
-        result = await session.execute(query)
-        media_files = result.scalars().all()
-        for media in media_files:
-            delete_object(media.storage_key)
-        
-        await session.delete(event)
-        await session.commit()
+           
+        await delete_event_data(event, session)
         
         return {"success": True, "message": "Event deleted successfully"}
 
@@ -675,10 +641,10 @@ async def delete_media(
         delete_object(media.storage_key)
 
         if media.status == "complete":
-            event.storage_used -= media.file_size
+            event.storage_used = max(0, event.storage_used - media.file_size)
 
         elif media.status == "pending":
-            event.reserved_storage -= media.file_size
+            event.reserved_storage = max(0, event.reserved_storage - media.file_size)
         
         await session.delete(media)
         await session.commit()
