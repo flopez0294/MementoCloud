@@ -5,6 +5,7 @@ from app.schema import UserCreate, UserRead, UserUpdate
 from app.users import auth_backend, current_active_user, fastapi_users
 from app.db import create_db_and_tables, User
 from app.routers import event
+from app.services.scheduler import scheduler
 from contextlib import asynccontextmanager
 import os
 
@@ -13,7 +14,13 @@ load_dotenv()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await create_db_and_tables()
+    print("Starting scheduler...")
+    scheduler.start()
+
     yield
+
+    print("Shutting down scheduler...")
+    scheduler.shutdown()
     
 app = FastAPI(lifespan=lifespan)
 

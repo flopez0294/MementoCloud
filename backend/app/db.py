@@ -7,7 +7,7 @@ from sqlalchemy import BigInteger, Column, Text, DateTime, Date, ForeignKey, Enu
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, relationship
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 import os
 
@@ -31,7 +31,8 @@ class Event(Base):
     event_name = Column(Text, nullable=False)
     search_id = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True)
     event_date = Column(Date, nullable=False)
-    event_created = Column(DateTime, default=datetime.now(timezone.utc))
+    event_created = Column(DateTime(timezone=True), default=datetime.now(timezone.utc))
+    delete_date = Column(DateTime(timezone=True), nullable=False)
     password_hash = Column(Text, nullable=False)
     storage_limit = Column(BigInteger, default=1024 * 1024 * 1024) 
     storage_used = Column(BigInteger, default=0)
@@ -49,7 +50,7 @@ class Media(Base):
     file_name = Column(Text, nullable=False)
     storage_key = Column(Text, nullable=False)
     media_type = Column(Enum("image", "video"), nullable=False)
-    uploaded_at = Column(DateTime, default=datetime.utcnow)
+    uploaded_at = Column(DateTime(timezone=True), default=datetime.now(timezone.utc))
     status = Column(Enum("pending", "complete"), nullable=False, default="pending")
     file_size = Column(BigInteger, nullable=False)
     content_type = Column(Text, nullable=False)

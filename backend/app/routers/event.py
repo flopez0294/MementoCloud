@@ -4,7 +4,7 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 from mimetypes import guess_type
 
@@ -51,10 +51,17 @@ async def create_event(
     """
     
     try:
+        event_timezone = ZoneInfo(event_in.timezone)
+        delete_date = datetime.combine(
+            event_in.event_date + timedelta(days=2),
+            time.min,
+            tzinfo=event_timezone,
+        ).astimezone(timezone.utc)
         db_event = Event(
             **event_in.model_dump(exclude={"password"}), 
             password_hash=password_hash.hash(event_in.password),
             user_id=user.id,
+            delete_date=delete_date
         )
         
         session.add(db_event)
