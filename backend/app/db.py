@@ -52,6 +52,7 @@ class Media(Base):
     media_type = Column(Enum("image", "video"), nullable=False)
     uploaded_at = Column(DateTime(timezone=True), default=datetime.now(timezone.utc))
     status = Column(Enum("pending", "complete"), nullable=False, default="pending")
+    url_expiration = Column(DateTime(timezone=True), nullable=False)
     file_size = Column(BigInteger, nullable=False)
     content_type = Column(Text, nullable=False)
     

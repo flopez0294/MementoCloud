@@ -406,7 +406,8 @@ async def upload_media(
                         if file.content_type.startswith("image/")
                         else "video"
                     ),
-                    status="pending"
+                    status="pending",
+                    url_expiration=datetime.now(timezone.utc) + timedelta(minutes=10)
                 )
 
                 session.add(media)
