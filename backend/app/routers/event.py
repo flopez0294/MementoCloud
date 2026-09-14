@@ -23,7 +23,7 @@ password_hash = PasswordHash.recommended()
 router = APIRouter(prefix="/api/event", tags=["event"])
 
 
-@router.post("")
+@router.post("", responses={400: {"detail": "There was an error parsing the body"}, 405: {"detail": "Method Not Allowed"}})
 async def create_event(
     event_in: EventCreate, 
     session: AsyncSession = Depends(get_async_session),
@@ -79,7 +79,7 @@ async def create_event(
             detail=f"Database transaction failed: {str(e)}"
         )
         
-@router.post("/{search_id}/verify")
+@router.post("/{search_id}/verify", responses={400: {"detail": "There was an error parsing the body"},404: {"detail": "Event not found"}})
 async def verify_event_password (
     search_id: UUID,
     password_verify: PasswordVerify,
@@ -120,7 +120,7 @@ async def verify_event_password (
         "token_type": "bearer"
     }
     
-@router.post("/{search_id}/upload/complete")
+@router.post("/{search_id}/upload/complete", responses={401: {"detail": "Invalid guest token"}})
 async def complete_upload(
     search_id: UUID,
     payload: UploadCompleteRequest,
@@ -254,7 +254,7 @@ async def complete_upload(
             detail="Failed to complete upload"
         ) from e
         
-@router.post("/{search_id}/upload")
+@router.post("/{search_id}/upload", responses={401: {"detail": "Invalid guest token"}})
 async def upload_media(
     payload: PreSignedUrlRequest,
     search_id: UUID,
@@ -481,7 +481,7 @@ async def get_events(
     events = result.scalars().all()
     return events
 
-@router.get("/{search_id}", response_model=GuestEventResponse)
+@router.get("/{search_id}", response_model=GuestEventResponse, responses= {401: {"detail": "Invalid guest token"}, 404: {"detail": "Event not found"}, 405: {"detail": "Method Not Allowed"},500: {"detail": "Failed to search event"}})
 async def get_search_event(
     search_id: UUID,
     session: AsyncSession = Depends(get_async_session),
@@ -539,7 +539,7 @@ async def get_search_event(
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to search event")
         
-@router.delete("/{event_id}")
+@router.delete("/{event_id}", responses={404: {"detail": "Event not found"}, 500: {"detail": "Failed to delete event media or event"}})
 async def delete_event(
     event_id: UUID,
     session: AsyncSession = Depends(get_async_session),
@@ -598,7 +598,7 @@ async def delete_event(
             detail="Failed to delete event"
         ) from e
     
-@router.delete("/{event_id}/media/{media_id}")
+@router.delete("/{event_id}/media/{media_id}", responses={403: {"detail":"Not authorized for deletion"}, 404: {"detail":"Event or media not found"}, 500: {"detail": "Failed to delete media from storage or database"}})
 async def delete_media(
     event_id: UUID,
     media_id: UUID, 

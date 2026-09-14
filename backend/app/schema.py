@@ -3,13 +3,13 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from uuid import UUID
 from fastapi_users import schemas
-from typing import Literal
+from typing import Literal, Annotated
 
 class EventCreate(BaseModel):
-    event_name: str
+    event_name: Annotated[str, Field(min_length=1)]
     event_date: date
-    timezone: str
-    password: str
+    timezone: Annotated[str, Field(min_length=1)]
+    password: Annotated[str, Field(min_length=6)]
     
     @field_validator("event_name")
     @classmethod
