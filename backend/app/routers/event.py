@@ -68,7 +68,14 @@ async def create_event(
         await session.commit()
         await session.refresh(db_event)
         
-        return {"status": "success", "event_id": str(db_event.id), "search_id": str(db_event.search_id)}
+        return JSONResponse(
+            status_code=201,
+            content={
+                "status": "success",
+                "event_id": str(db_event.id),
+                "search_id": str(db_event.search_id),
+            },
+        )
     except Exception as e:
         # Roll back the transaction if anything goes wrong during commit
         await session.rollback()
