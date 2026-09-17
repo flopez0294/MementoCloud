@@ -4,7 +4,8 @@ from uuid import UUID
 from typing import Literal
 
 from app.db import Event, Media
-from app.services.storage import delete_object
+from app.schema import GuestEventResponse
+from app.services.storage import delete_object, generate_get_presign_url
 
 async def find_event(
     id: UUID,
@@ -31,6 +32,38 @@ async def find_event(
         query = select(Event).where(Event.search_id == id)
     result = await session.execute(query)
     return result.scalar_one_or_none()
+
+async def event_data(
+    event: Event,
+    session: AsyncSession,
+):
+    """
+    Retrieves the completed media associated with an event and generates
+    presigned URLs for accessing each media file.
+
+    Args:
+        event (Event):  The event whose information and completed media files
+            will be retrieved.
+        session (AsyncSession): The database session used to query the media
+            records associated with the event.
+
+    Returns:
+        GuestEventResponse: The event information, including the event's
+            search ID, name, date, presigned media URLs, and media IDs.
+    """
+    result = await session.execute(select(Media).where(Media.event_id == event.id, Media.status == "complete"))
+    media = result.scalars().all()
+    media_urls = [generate_get_presign_url(m.storage_key) for m in media]
+    media_ids = [m.id for m in media]
+
+
+    return GuestEventResponse(
+        search_id=event.search_id,
+        event_name=event.event_name,
+        event_date=event.event_date,
+        media=media_urls,
+        media_ids=media_ids
+    )
 
 async def delete_event_data(
 	event: Event,

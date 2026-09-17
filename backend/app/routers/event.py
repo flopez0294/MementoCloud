@@ -11,7 +11,7 @@ from mimetypes import guess_type
 from app.db import Event, User, Media, get_async_session
 from app.users import current_active_user
 from app.schema import EventCreate, EventResponse, GuestTokenPayload, GuestEventResponse, PasswordVerify, PreSignedUrlRequest, UploadCompleteRequest
-from app.services.event_service import delete_event_data, delete_media_data, find_event
+from app.services.event_service import delete_event_data, delete_media_data, event_data, find_event
 from app.services.storage import create_storage_key, generate_put_presign_url, get_object_metadata, generate_get_presign_url, delete_object
 from app.services.guest import current_guest, create_guest_token
 from pwdlib import PasswordHash
@@ -488,6 +488,49 @@ async def get_events(
     events = result.scalars().all()
     return events
 
+@router.get("/{search_id}/owner", response_model=GuestEventResponse)
+async def get_owner_event(
+    search_id: UUID,
+    user: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_async_session)
+):
+    """
+    Retrieves an event owned by the currently authenticated user using its public search ID.
+
+    Args:
+        search_id (UUID): The public search ID used to identify the event.
+        user (User, optional): The currently authenticated user. The user must 
+            own the requested event. Defaults to Depends(current_active_user).
+        session (AsyncSession, optional): The database session used to retrieve 
+            the event and its associated media. Defaults to Depends(get_async_session).
+
+    Raises:
+        HTTPException: If the event cannot be found, with a 404 status code.
+        HTTPException: If the authenticated user does not own the event, with 
+            a 403 status code.
+        HTTPException: If an unexpected error occurs while retrieving the event, 
+            with a 500 status code.
+
+    Returns:
+        GuestEventResponse: The event information available to the authenticated owner, 
+            including the event's search ID, name, date, media URLs, and media IDs.
+    """
+    try:
+        event = await find_event(search_id, session, "search_id")
+        
+        if not event:
+            raise HTTPException(status_code=404, detail="Event not found")
+        
+        if event.user_id != user.id:
+            raise HTTPException(status_code=403, detail="You are not authorized for this event")
+        
+        return await event_data(event, session)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to search event")
+
 @router.get("/{search_id}", response_model=GuestEventResponse, responses= {401: {"detail": "Invalid guest token"}, 404: {"detail": "Event not found"}, 405: {"detail": "Method Not Allowed"},500: {"detail": "Failed to search event"}})
 async def get_search_event(
     search_id: UUID,
@@ -504,13 +547,14 @@ async def get_search_event(
         guest (GuestTokenPayload): The authenticated guest token payload used to
             verify access to the event. Defaults to Depends(current_guest).
 
-    Returns:
-        GuestEventResponse: The event information available to guests.
-
     Raises:
         HTTPException: If the event cannot be found, with a 404 status code.
         HTTPException: If an unexpected error occurs while retrieving the event,
             with a 500 status code.
+            
+    Returns:
+        GuestEventResponse: The event information available to the authenticated owner, 
+            including the event's search ID, name, date, media URLs, and media IDs.
     """
     
     try:
@@ -528,19 +572,7 @@ async def get_search_event(
                 detail="Guest token does not belong to this event"
             )
 
-        result = await session.execute(select(Media).where(Media.event_id == event.id, Media.status == "complete"))
-        media = result.scalars().all()
-        media_urls = [generate_get_presign_url(m.storage_key) for m in media]
-        media_ids = [m.id for m in media]
-
-
-        return GuestEventResponse(
-            search_id=event.search_id,
-            event_name=event.event_name,
-            event_date=event.event_date,
-            media=media_urls,
-            media_ids=media_ids
-        )
+        return await event_data(event, session)
     except HTTPException:
         raise
     except Exception as e:
