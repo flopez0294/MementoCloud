@@ -9,9 +9,25 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "aiosqlite>=0.22.1",
+    "apscheduler>=3.11.3",
+    "boto3>=1.43.51",
     "fastapi>=0.139.2",
     "fastapi-users[sqlalchemy]>=15.0.5",
     "python-dotenv>=1.2.2",
+    "resend>=2.45.0",
     "ruff>=0.15.22",
     "uvicorn[standard]>=0.51.0",
 ]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "schemathesis>=4.27.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"

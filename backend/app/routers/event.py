@@ -1,25 +1,81 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.schema import EventCreate
+from sqlalchemy import select
+from uuid import UUID
+from datetime import datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
+from mimetypes import guess_type
 
-from app.db import Event, get_async_session
+from app.db import Event, User, Media, get_async_session
+from app.users import current_active_user
+from app.schema import EventCreate, EventResponse, GuestTokenPayload, GuestEventResponse, PasswordVerify, PreSignedUrlRequest, UploadCompleteRequest
+from app.services.event_service import delete_event_data, delete_media_data, event_data, find_event
+from app.services.storage import create_storage_key, generate_put_presign_url, get_object_metadata, generate_get_presign_url, delete_object
+from app.services.guest import current_guest, create_guest_token
+from pwdlib import PasswordHash
 
+MAX_FILE_COUNT = 10
+MAX_IMAGE_SIZE = 20 * 1024 * 1024
+MAX_VIDEO_SIZE = 200 * 1024 * 1024
+password_hash = PasswordHash.recommended()
 router = APIRouter(prefix="/api/event", tags=["event"])
 
-@router.post("")
+
+@router.post("", responses={400: {"detail": "There was an error parsing the body"}, 405: {"detail": "Method Not Allowed"}})
 async def create_event(
     event_in: EventCreate, 
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_active_user)
 ):
-    # Tr
+    """
+    Creates a new event for the currently authenticated user.
+
+    Args:
+        event_in (EventCreate): The event information provided by the user,
+            including the event name, date, and password.
+        session (AsyncSession, optional): The database session used to create
+            and persist the event. Defaults to Depends(get_async_session).
+        user (User, optional): The currently authenticated user who owns the
+            event. Defaults to Depends(current_active_user).
+
+    Raises:
+        HTTPException: If an error occurs while creating or saving the event
+            to the database. The transaction is rolled back and a 500 status
+            code is returned.
+
+    Returns:
+        dict: A success response containing the newly created event's ID
+            and public search ID.
+    """
+    
     try:
-        db_event = Event(**event_in.model_dump())
+        event_timezone = ZoneInfo(event_in.timezone)
+        delete_date = datetime.combine(
+            event_in.event_date + timedelta(days=2),
+            time.min,
+            tzinfo=event_timezone,
+        ).astimezone(timezone.utc)
+        db_event = Event(
+            **event_in.model_dump(exclude={"password"}), 
+            password_hash=password_hash.hash(event_in.password),
+            user_id=user.id,
+            delete_date=delete_date
+        )
         
         session.add(db_event)
         await session.commit()
         await session.refresh(db_event)
         
-        return {"status": "success", "event_id": str(db_event.id)}
+        return JSONResponse(
+            status_code=201,
+            content={
+                "status": "success",
+                "event_id": str(db_event.id),
+                "search_id": str(db_event.search_id),
+            },
+        )
     except Exception as e:
         # Roll back the transaction if anything goes wrong during commit
         await session.rollback()
@@ -29,3 +85,626 @@ async def create_event(
             status_code=500,
             detail=f"Database transaction failed: {str(e)}"
         )
+        
+@router.post("/{search_id}/verify", responses={400: {"detail": "There was an error parsing the body"},404: {"detail": "Event not found"}})
+async def verify_event_password (
+    search_id: UUID,
+    password_verify: PasswordVerify,
+    session: AsyncSession = Depends(get_async_session)
+):
+    """
+    Verifies an event password and generates a guest access token.
+
+    Args:
+        search_id (UUID): The public search ID used to identify the event.
+        password_verify (PasswordVerify): The password provided by the guest
+            for verification.
+        session (AsyncSession, optional): The database session used to retrieve
+            the event. Defaults to Depends(get_async_session).
+            
+    Raises:
+        HTTPException: If the event cannot be found, with a 404 status code.
+        HTTPException: If the provided password is incorrect, with a 401
+            status code.
+
+    Returns:
+        dict: A bearer access token that can be used by the guest to access
+            protected event resources.
+    """
+
+    event = await find_event(search_id, session)
+
+    if not event:
+        raise HTTPException(status_code=404,detail="Event not found")
+        
+    if not password_hash.verify(password=password_verify.password, hash=event.password_hash):
+        raise HTTPException(status_code=401, detail="Incorrect password")
+    
+    token = create_guest_token(event_id=str(event.id), search_id=str(event.search_id))
+    
+    return {
+        "access_token": token,
+        "token_type": "bearer"
+    }
+    
+@router.post("/{search_id}/upload/complete", responses={401: {"detail": "Invalid guest token"}})
+async def complete_upload(
+    search_id: UUID,
+    payload: UploadCompleteRequest,
+    session: AsyncSession = Depends(get_async_session),
+    guest: GuestTokenPayload = Depends(current_guest)
+):
+    """
+    Verifies a media upload and marks it as complete.
+
+    Args:
+        search_id (UUID): The public search ID used to identify the event.
+        payload (UploadCompleteRequest): Contains the ID of the media record
+            associated with the completed upload.
+        session (AsyncSession, optional): The database session used to retrieve
+            and update the event and media records. Defaults to
+            Depends(get_async_session).
+        guest (GuestTokenPayload): The authenticated guest token payload used to
+            verify access to the event. Defaults to Depends(current_guest).
+            
+    Raises:
+        HTTPException: If the event is not found, with a 404 status code.
+        HTTPException: If the guest token does not belong to the event, with
+            a 403 status code.
+        HTTPException: If the media record is not found, with a 404 status code.
+        HTTPException: If the media does not belong to the event, with a
+            403 status code.
+        HTTPException: If the uploaded file does not exist in storage, with
+            a 400 status code.
+        HTTPException: If the uploaded file size does not match the expected
+            size, with a 400 status code.
+        HTTPException: If the uploaded file's content type does not match
+            the expected media type, with a 400 status code.
+        HTTPException: If an unexpected error occurs while processing the
+            upload, with a 500 status code.
+
+    Returns:
+        dict: A success response indicating whether the upload was completed
+            or had already been completed.
+
+    """
+    
+    try:
+        event = await find_event(search_id, session)
+
+        if not event:
+            raise HTTPException(
+                status_code=404,
+                detail="Event not found"
+            )
+
+        if (
+            guest.search_id != str(search_id)
+            or guest.event_id != str(event.id)
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Guest token does not belong to this event"
+            )
+
+        media = await session.get(Media, payload.media_id)
+
+        if not media:
+            raise HTTPException(
+                status_code=404,
+                detail="Media not found"
+            )
+
+        if media.event_id != event.id:
+            raise HTTPException(
+                status_code=403,
+                detail="Media does not belong to this event"
+            )
+
+        if media.status == "complete":
+            return {
+                "success": True,
+                "message": "Already completed"
+            }
+
+        metadata = get_object_metadata(media.storage_key)
+
+        if not metadata:
+            raise HTTPException(
+                status_code=400,
+                detail="File not uploaded"
+            )
+
+        if metadata["content_length"] != media.file_size:
+            raise HTTPException(
+                status_code=400,
+                detail="Uploaded file size does not match expected size"
+            )
+
+        if metadata["content_type"] != media.content_type:
+            raise HTTPException(
+                status_code=400,
+                detail="Uploaded file content type does not match expected type"
+            )
+
+        if media.media_type == "image" and not metadata["content_type"].startswith("image/"):
+            raise HTTPException(
+                status_code=400,
+                detail="Uploaded file is not an image"
+            )
+
+        if media.media_type == "video" and not metadata["content_type"].startswith("video/"):
+            raise HTTPException(
+                status_code=400,
+                detail="Uploaded file is not a video"
+            )
+
+        media.status = "complete"
+
+        event.reserved_storage -= media.file_size
+        event.storage_used += media.file_size
+
+        await session.commit()
+
+        return {
+            "success": True,
+            "message": "Upload completed"
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to complete upload"
+        ) from e
+        
+@router.post("/{search_id}/upload", responses={401: {"detail": "Invalid guest token"}})
+async def upload_media(
+    payload: PreSignedUrlRequest,
+    search_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
+    guest: GuestTokenPayload = Depends(current_guest)
+):
+    """
+    Validates media files and generates presigned URLs for direct uploads.
+
+    Args:
+        payload (PreSignedUrlRequest): Contains metadata for the files to be
+            uploaded, including filenames, content types, and file sizes.
+        search_id (UUID): The public search ID used to identify the event.
+        session (AsyncSession, optional): The database session used to create
+            pending media records. Defaults to Depends(get_async_session).
+        guest (GuestTokenPayload): The authenticated guest token payload used to
+            verify access to the event. Defaults to Depends(current_guest).
+    
+    Raises:
+        HTTPException: If the request exceeds the maximum number of allowed
+            files, with a 400 status code.
+        HTTPException: If the event cannot be found, with a 404 status code.
+        HTTPException: If the guest token does not belong to the event, with
+            a 403 status code.
+        HTTPException: If it is not the current date for the event, with
+            a 403 status code.
+        HTTPException: If the event's storage limit is exceeded, with a 413
+            status code.
+        HTTPException: If all submitted files are rejected, with a 400 status
+            code.
+        HTTPException: If the event's available storage limit is exceeded, with 
+            a 413 status code.
+        HTTPException: If an unexpected error occurs while creating media
+            records or generating presigned URLs, with a 500 status code.
+
+    Returns:
+        dict: A response containing the generated presigned upload URLs and
+            associated media records. If some files are rejected, the response
+            includes both the accepted and rejected files.
+    """
+    
+    try:  
+        if len(payload.files) > MAX_FILE_COUNT:
+            raise HTTPException(status_code=400, detail=f"Maximum of {MAX_FILE_COUNT} files allowed per request.")
+         
+        event = await find_event(search_id, session) 
+        if not event:
+            raise HTTPException(status_code=404, detail="Event not found")
+        
+        if guest.search_id != str(search_id) or guest.event_id != str(event.id):
+                raise HTTPException(status_code=403, detail="Guest token does not belong to this event")
+            
+        if datetime.now(ZoneInfo(event.timezone)).date() != event.event_date:
+                    raise HTTPException(status_code=403, detail="Uploads are only allowed on the event date")
+        
+        accepted_files = []
+        rejected_files = []
+
+        allowed_image_types = {"image/jpeg", "image/jpg", "image/png", "image/webp", "image/svg+xml", "image/heic"}
+        allowed_video_types = {"video/mp4", "video/quicktime", "video/webm", "video/x-matroska", "video/avi", "video/mpeg"}
+
+        for file in payload.files:
+            if not file.filename:
+                continue
+            content_type = file.content_type
+            
+            guessed_type, _ = guess_type(file.filename)
+            if guessed_type and guessed_type.lower() != file.content_type.strip().lower():
+                rejected_files.append({
+                    "filename": file.filename,
+                    "reason": "File extension does not match the content type provided"
+                })
+                continue
+
+
+            if content_type not in allowed_image_types and content_type not in allowed_video_types:
+                rejected_files.append({
+                    "filename": file.filename,
+                    "reason": "Only image and video files are allowed"
+                })
+                continue
+
+            if content_type.startswith("image/"):
+                if file.size > MAX_IMAGE_SIZE:
+                    rejected_files.append({
+                        "filename": file.filename,
+                        "reason": "Image exceeds maximum size"
+                    })
+                    continue
+
+            elif content_type.startswith("video/"):
+                if file.size > MAX_VIDEO_SIZE:
+                    rejected_files.append({
+                        "filename": file.filename,
+                        "reason": "Video exceeds maximum size"
+                    })
+                    continue
+
+            if file.size <= 0:
+                rejected_files.append({
+                    "filename": file.filename,
+                    "reason": "File cannot be empty"
+                })
+                continue
+
+            accepted_files.append(file)
+
+        if not accepted_files:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": "All files were rejected",
+                    "rejected_files": rejected_files
+                }
+            )
+
+        
+
+        requested_storage = sum(file.size for file in accepted_files)
+
+        available_storage = event.storage_limit - event.storage_used - event.reserved_storage
+
+        if requested_storage > available_storage:
+            raise HTTPException(
+                status_code=413,
+                detail="Event storage limit exceeded"
+            )
+
+        event.reserved_storage += requested_storage
+        await session.flush()
+
+        uploaded_files = []
+
+        try:
+            for file in accepted_files:
+                storage_key = create_storage_key(
+                    event.id,
+                    file.filename
+                )
+
+                media = Media(
+                    event_id=event.id,
+                    file_name=file.filename,
+                    storage_key=storage_key,
+                    file_size=file.size,
+                    content_type=file.content_type,
+                    media_type=(
+                        "image"
+                        if file.content_type.startswith("image/")
+                        else "video"
+                    ),
+                    status="pending",
+                    url_expiration=datetime.now(timezone.utc) + timedelta(minutes=10)
+                )
+
+                session.add(media)
+                await session.flush()
+
+                presigned_url = await run_in_threadpool(
+                    generate_put_presign_url,
+                    storage_key,
+                    file.content_type
+                )
+
+                uploaded_files.append({
+                    "id": media.id,
+                    "filename": file.filename,
+                    "content_type": file.content_type,
+                    "uploadURL": presigned_url
+                })
+
+            await session.commit()
+
+        except Exception:
+            await session.rollback()
+            raise
+            
+        if rejected_files:
+            return JSONResponse(
+                status_code=207,
+                content={
+                    "message": "Some files succeeded and some failed",
+                    "uploaded_files": uploaded_files,
+                    "rejected_files": rejected_files
+                }
+            )
+
+        return {
+            "success": True,
+            "message": "Upload URLs generated",
+            "media": uploaded_files
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to generate upload links"
+        ) from e
+
+@router.get("", response_model=list[EventResponse])
+async def get_events(
+    session: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_active_user)
+):
+    """
+    Retrieves all events belonging to the currently authenticated user.
+
+    Args:
+        session (AsyncSession, optional): The database session used to query
+            the user's events. Defaults to Depends(get_async_session).
+        user (User, optional): The currently authenticated user whose events
+            will be retrieved. Defaults to Depends(current_active_user).
+
+    Returns:
+        list[EventResponse]: A list of events owned by the authenticated user.
+            Returns an empty list if the user has no events.
+    """
+    query = select(Event).where(Event.user_id == user.id)
+    result = await session.execute(query)
+    events = result.scalars().all()
+    return events
+
+@router.get("/{search_id}/owner", response_model=GuestEventResponse)
+async def get_owner_event(
+    search_id: UUID,
+    user: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_async_session)
+):
+    """
+    Retrieves an event owned by the currently authenticated user using its public search ID.
+
+    Args:
+        search_id (UUID): The public search ID used to identify the event.
+        user (User, optional): The currently authenticated user. The user must 
+            own the requested event. Defaults to Depends(current_active_user).
+        session (AsyncSession, optional): The database session used to retrieve 
+            the event and its associated media. Defaults to Depends(get_async_session).
+
+    Raises:
+        HTTPException: If the event cannot be found, with a 404 status code.
+        HTTPException: If the authenticated user does not own the event, with 
+            a 403 status code.
+        HTTPException: If an unexpected error occurs while retrieving the event, 
+            with a 500 status code.
+
+    Returns:
+        GuestEventResponse: The event information available to the authenticated owner, 
+            including the event's search ID, name, date, media URLs, and media IDs.
+    """
+    try:
+        event = await find_event(search_id, session, "search_id")
+        
+        if not event:
+            raise HTTPException(status_code=404, detail="Event not found")
+        
+        if event.user_id != user.id:
+            raise HTTPException(status_code=403, detail="You are not authorized for this event")
+        
+        return await event_data(event, session)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to search event")
+
+@router.get("/{search_id}", response_model=GuestEventResponse, responses= {401: {"detail": "Invalid guest token"}, 404: {"detail": "Event not found"}, 405: {"detail": "Method Not Allowed"},500: {"detail": "Failed to search event"}})
+async def get_search_event(
+    search_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
+    guest: GuestTokenPayload = Depends(current_guest)
+) :
+    """
+    Retrieves an event using its public search ID.
+
+    Args:
+        search_id (UUID): The public search ID used to identify the event.
+        session (AsyncSession, optional): The database session used to retrieve
+            the event. Defaults to Depends(get_async_session).
+        guest (GuestTokenPayload): The authenticated guest token payload used to
+            verify access to the event. Defaults to Depends(current_guest).
+
+    Raises:
+        HTTPException: If the event cannot be found, with a 404 status code.
+        HTTPException: If an unexpected error occurs while retrieving the event,
+            with a 500 status code.
+            
+    Returns:
+        GuestEventResponse: The event information available to the authenticated owner, 
+            including the event's search ID, name, date, media URLs, and media IDs.
+    """
+    
+    try:
+        event = await find_event(search_id, session)
+
+        if not event:
+            raise HTTPException(status_code=404, detail="Event not found")
+
+        if (
+            guest.search_id != str(search_id)
+            or guest.event_id != str(event.id)
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Guest token does not belong to this event"
+            )
+
+        return await event_data(event, session)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to search event")
+        
+@router.delete("/{event_id}", responses={404: {"detail": "Event not found"}, 500: {"detail": "Failed to delete event media or event"}})
+async def delete_event(
+    event_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_active_user)
+):
+    """
+    Deletes an event owned by the currently authenticated user.
+
+    Args:
+        event_id (UUID): The unique ID of the event to delete.
+        session (AsyncSession, optional): The database session used to retrieve
+            and delete the event. Defaults to Depends(get_async_session).
+        user (User, optional): The currently authenticated user. The event must
+            belong to this user to be deleted. Defaults to
+            Depends(current_active_user).
+    
+    Raises:
+        HTTPException: If the event does not exist or does not belong to the
+            authenticated user, with a 404 status code.
+        HTTPException: If an unexpected error occurs while deleting the event,
+            with a 500 status code. The database transaction is rolled back.
+
+    Returns:
+        dict: A success response confirming that the event was deleted.
+    """
+
+    try:
+        query = select(Event).where(
+            Event.id == event_id,
+            Event.user_id == user.id
+        )
+
+        result = await session.execute(query)
+        event = result.scalar_one_or_none()
+        if not event:
+            raise HTTPException(status_code=404, detail="Event not found")
+           
+        await delete_event_data(event, session)
+        
+        return {"success": True, "message": "Event deleted successfully"}
+
+    except HTTPException:
+        raise
+    
+    except RuntimeError as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to delete event media"
+        ) from e
+
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to delete event"
+        ) from e
+    
+@router.delete("/{event_id}/media/{media_id}", responses={403: {"detail":"Not authorized for deletion"}, 404: {"detail":"Event or media not found"}, 500: {"detail": "Failed to delete media from storage or database"}})
+async def delete_media(
+    event_id: UUID,
+    media_id: UUID, 
+    user: User = Depends(current_active_user),
+    session: AsyncSession  = Depends(get_async_session)
+):
+    """
+    Deletes a media file from both R2 storage and the database.
+
+    Args:
+        event_id (UUID): The unique ID of the event containing the media.
+        media_key (UUID): The unique ID of the media object to delete.
+        user (User, optional): The currently authenticated user. The user must
+            own the event to delete its media. Defaults to Depends(current_active_user).
+        session (AsyncSession, optional): The database session used to retrieve
+            the event and media record and delete the media. Defaults to Depends(get_async_session).
+
+    Raises:
+        HTTPException: If the event does not exist, with a 404 status code.
+        HTTPException: If the event owner is not the authenticated user, with a
+            403 status code.
+        HTTPException: If the media does not exist or does not belong to the
+            specified event, with a 404 status code.
+        HTTPException: If the media cannot be deleted from storage, with a 500
+            status code.
+        HTTPException: If an unexpected error occurs while deleting the media,
+            with a 500 status code. The database transaction is rolled back.
+
+    Returns:
+        dict: A success response confirming that the media was deleted.
+    """
+    try:
+        event = await find_event(event_id, session, "id")
+        
+        if not event:
+            raise HTTPException(status_code=404, detail="Event not found")
+        
+        if event.user_id != user.id:
+            raise HTTPException(status_code=403, detail="Not authorized for deletion")
+        
+        query = select(Media).where(Media.id == media_id, Media.event_id == event.id)
+        result = await session.execute(query)
+        media = result.scalar_one_or_none()
+        
+        if not media: 
+            raise HTTPException(status_code=404 , detail="Media does not exist")
+                                
+        await delete_media_data(event, media, session)
+        
+        return {
+            "success": True,
+            "message": "Media deleted"
+        }
+        
+    except HTTPException:
+        raise
+    
+    except RuntimeError as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to delete media from storage"
+        ) from e
+
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to delete media"
+        ) from e
