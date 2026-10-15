@@ -70,9 +70,9 @@ export default function Home() {
 
       {/* ==================== HERO ==================== */}
 
-      <section className="relative min-h-190 px-6 pb-20 pt-36 lg:px-10 lg:pt-44">
+      <section className="relative px-6 pb-12 pt-28 sm:pt-32 lg:px-10 lg:pb-10 lg:pt-28">
 
-        <div className="mx-auto grid max-w-7xl items-center gap-14 lg:grid-cols-[0.90fr_1.10fr]">
+        <div className="mx-auto grid max-w-7xl items-center gap-8 lg:grid-cols-[0.95fr_1.05fr] xl:gap-12 2xl:gap-16">
 
           {/* Hero text */}
 
@@ -82,13 +82,13 @@ export default function Home() {
               Your moments. Forever.
             </p>
 
-            <h1 className=" text-[clamp(3.4rem,7vw,6.7rem)] font-normal leading-[0.9] tracking-[-0.055em]">
+            <h1 className="text-[clamp(2.8rem,5.2vw,5.5rem)] font-normal leading-[0.92] tracking-[-0.055em] xl:text-[clamp(5rem,5.2vw,6.25rem)]">
               The easiest way to collect and share your memories.
             </h1>
 
             <p className="mt-8 max-w-lg text-base leading-7 text-[#54483f]/65 md:text-lg">
               MementoCloud lets you create private event albums where you
-              and your guests can upload photos and videos — no account
+              and your guests can upload photos and videos - no account
               needed. Keep your special moments safe, organized, and easy
               to relive.
             </p>
@@ -129,7 +129,7 @@ export default function Home() {
             <div className="relative overflow-hidden border border-[#54483f]/10 bg-white p-3 shadow-[0_25px_70px_rgba(84,72,63,0.15)]">
 
               <div
-                className="aspect-[1.22/1] bg-cover bg-center"
+                className="aspect-[1.22/1] bg-cover bg-center xl:aspect-[1.3/1]"
                 style={{
                   backgroundImage:
                     "url('https://images.unsplash.com/photo-1519225421980-715cb0215aed?auto=format&fit=crop&w=1400&q=85')",
@@ -178,10 +178,10 @@ export default function Home() {
 
       <section
         id="features"
-        className="border-y border-[#54483f]/5 bg-[#faf7f1] px-6 py-24 lg:px-10 lg:py-32"
+        className="border-y border-[#54483f]/5 bg-[#faf7f1] px-6 py-16 sm:py-20 lg:px-10 lg:py-24 xl:py-28"
       >
 
-        <div className="mx-auto grid max-w-7xl items-center gap-20 lg:grid-cols-[0.85fr_1.15fr]">
+        <div className="mx-auto grid max-w-7xl items-center gap-16 lg:grid-cols-[0.9fr_1.1fr] lg:gap-12 xl:gap-20">
 
           {/* Text */}
 
@@ -191,14 +191,14 @@ export default function Home() {
               Built for real moments
             </p>
 
-            <h2 className="max-w-xl text-5xl font-normal leading-[0.98] tracking-[-0.045em] md:text-6xl">
+            <h2 className="max-w-xl text-4xl font-normal leading-[0.98] tracking-[-0.045em] sm:text-5xl lg:text-5xl xl:text-6xl">
               Simple. Secure.
               <br />
               Made for everyone.
             </h2>
 
-            <p className="mt-7 max-w-lg text-base leading-7 text-[#54483f]/60">
-              Whether its a wedding, birthday, family reunion, or a
+            <p className="mt-6 max-w-lg text-sm leading-6 text-[#54483f]/60 sm:text-base sm:leading-7">
+              Whether it&apos;s a wedding, birthday, family reunion, or a
               night with friend&apos;s, MementoCloud makes it easy to capture
               and share what matters most.
             </p>
@@ -206,12 +206,12 @@ export default function Home() {
 
             {/* Feature grid */}
 
-            <div className="mt-12 grid gap-x-10 gap-y-10 sm:grid-cols-2">
+            <div className="mt-10 grid grid-cols-1 gap-x-8 gap-y-8 sm:grid-cols-2 xl:mt-12 xl:gap-x-10 xl:gap-y-10">
 
               {features.map((feature) => (
                 <div key={feature.title}>
 
-                  <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-[#c9c1b8]/60 text-lg">
+                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-[#c9c1b8]/60 text-lg text-[#54483f]">
                     {feature.icon}
                   </div>
 
@@ -219,7 +219,7 @@ export default function Home() {
                     {feature.title}
                   </h3>
 
-                  <p className="text-sm leading-6 text-[#54483f]/55">
+                  <p className="max-w-xs text-sm leading-6 text-[#54483f]/60">
                     {feature.description}
                   </p>
 
@@ -235,9 +235,9 @@ export default function Home() {
 
           <div className="relative flex justify-center">
 
-            <div className="absolute left-1/2 top-1/2 h-120 w-120 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#c9c1b8]/45" />
+            <div className="absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#c9c1b8]/45 sm:h-96 sm:w-96 lg:h-104 lg:w-104 xl:h-120 xl:w-120" />
 
-            <div className="relative z-10 w-70 overflow-hidden rounded-[2.7rem] border-[7px] border-[#54483f] bg-[#54483f] shadow-[0_30px_70px_rgba(84,72,63,0.2)] md:w-82.5">
+            <div className="relative z-10 w-64 overflow-hidden rounded-[2.7rem] border-[7px] border-[#54483f] bg-[#54483f] shadow-[0_30px_70px_rgba(84,72,63,0.2)] sm:w-72 lg:w-76 xl:w-80">
 
               <div className="aspect-9/19 bg-white">
 
@@ -292,11 +292,15 @@ export default function Home() {
                   {galleryImages.map((image) => (
                     <div
                       key={image}
-                      className="aspect-square bg-cover bg-center"
-                      style={{
-                        backgroundImage: `url('${image}')`,
-                      }}
-                    />
+                      className="aspect-square overflow-hidden"
+                    >
+                      <div
+                        className="h-full w-full bg-cover bg-center transition-transform duration-300 ease-out hover:scale-110 hover:shadow-lg"
+                        style={{
+                          backgroundImage: `url('${image}')`,
+                        }}
+                      />
+                    </div>
                   ))}
 
                 </div>
@@ -343,14 +347,14 @@ export default function Home() {
             {steps.map((step) => (
               <div
                 key={step.number}
-                className="bg-[#faf7f1] p-8 md:p-10"
+                className="group bg-[#faf7f1] p-8 md:p-10 transition-all duration-300 ease-out hover:-translate-y-1.5 hover:bg-white hover:shadow-[0_12px_30px_rgba(84,72,63,0.10)]"
               >
 
-                <p className="text-xs tracking-[0.2em] text-[#4f6053]">
+                <p className="text-xs tracking-[0.2em] text-[#4f6053] transition-colors duration-300 group-hover:text-[#5f6f62]">
                   {step.number}
                 </p>
 
-                <h3 className="mt-16 text-2xl tracking-tight">
+                <h3 className="mt-16 text-2xl tracking-tight transition-transform duration-300 group-hover:translate-x-1">
                   {step.title}
                 </h3>
 
