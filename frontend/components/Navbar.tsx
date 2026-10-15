@@ -44,7 +44,7 @@ export default function Navbar() {
             </Link>
 
             <Link
-              href="/create"
+              href="/login"
               className="rounded-full bg-[#5f6f62] px-5 py-2.5 font-medium text-[#f5f0e8] transition hover:-translate-y-0.5 hover:bg-[#4f6053]"
             >
               Get Started
