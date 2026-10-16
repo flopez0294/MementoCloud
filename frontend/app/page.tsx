@@ -96,7 +96,7 @@ export default function Home() {
             <div className="mt-9 flex flex-wrap items-center gap-5">
 
               <Link
-                href="/create"
+                href="/signup"
                 className="rounded-full bg-[#5f6f62] px-7 py-3.5 text-sm font-medium text-[#f5f0e8] transition hover:-translate-y-1 hover:bg-[#4f6053]"
               >
                 Get Started
