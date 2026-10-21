@@ -1,8 +1,13 @@
+"use client"
+
 import Link from "next/link";
 import { Cloud } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 
 export default function Navbar() {
+  const { user } = useAuth();
+
   return (
     <header className="absolute inset-x-0 top-0 z-50">
         <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-6 lg:px-10">
@@ -36,19 +41,30 @@ export default function Navbar() {
           </div>
 
           <div className="flex items-center gap-5 text-sm">
-            <Link
-              href="/login"
-              className="hidden text-[#54483f]/80 transition hover:text-[#54483f] sm:block"
-            >
-              Sign In
-            </Link>
+            {user ? (
+              <Link
+                href="/dashboard"
+                className="rounded-full bg-[#5f6f62] px-5 py-2.5 font-medium text-[#f5f0e8] transition hover:-translate-y-0.5 hover:bg-[#4f6053]"
+              >
+                Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="hidden text-[#54483f]/80 transition hover:text-[#54483f] sm:block"
+                >
+                  Sign In
+                </Link>
 
-            <Link
-              href="/signup"
-              className="rounded-full bg-[#5f6f62] px-5 py-2.5 font-medium text-[#f5f0e8] transition hover:-translate-y-0.5 hover:bg-[#4f6053]"
-            >
-              Get Started
-            </Link>
+                <Link
+                  href="/signup"
+                  className="rounded-full bg-[#5f6f62] px-5 py-2.5 font-medium text-[#f5f0e8] transition hover:-translate-y-0.5 hover:bg-[#4f6053]"
+                >
+                  Get Started
+                </Link>
+              </>
+            )}
           </div>
 
         </nav>

@@ -1,5 +1,12 @@
-
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+export type AuthUser = {
+  id: string;
+  email: string;
+  is_active: boolean;
+  is_superuser: boolean;
+  is_verified: boolean;
+};
 
 type AuthResponse = {
   access_token: string;
@@ -95,4 +102,24 @@ export function saveAccessToken(token: string): void {
 
 export function clearAccessToken(): void {
   localStorage.removeItem("access_token");
+}
+
+export async function getCurrentUser(
+  token: string,
+): Promise<AuthUser> {
+  const response = await fetch(`${getApiUrl()}/users/me`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new Error("Your session is invalid or expired.");
+    }
+
+    throw new Error("Unable to retrieve your account.");
+  }
+
+  return response.json();
 }

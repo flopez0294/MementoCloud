@@ -1,10 +1,9 @@
-
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import AuthLoading from "@/components/AuthLoading";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   ArrowRight,
   Cloud,
@@ -15,13 +14,6 @@ import {
   UserRound,
 } from "lucide-react";
 
-import {
-  register,
-  login,
-  getAccessToken,
-  saveAccessToken,
-} from "@/lib/auth";
-
 type AuthMode = "signin" | "signup";
 
 type AuthFormProps = {
@@ -29,27 +21,12 @@ type AuthFormProps = {
 };
 
 export default function AuthForm({ mode }: AuthFormProps) {
-  const router = useRouter();
-
+  const { login, register, loading, isAuthenticated } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const isSignUp = mode === "signup";
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      const token = getAccessToken();
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      if (token) {
-        router.replace("/");
-      } else {
-        setIsCheckingAuth(false);
-      }
-    };
-    checkAuth();
-  }, [router]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -63,14 +40,10 @@ export default function AuthForm({ mode }: AuthFormProps) {
 
     try {
       if (isSignUp) {
-        await register({ email, password });
+        await register(email, password);
+      } else {
+        await login(email, password);
       }
-
-      const tokenData = await login(email, password);
-
-      saveAccessToken(tokenData.access_token);
-
-      router.push("/");
     } catch (err) {
       setError(
         err instanceof Error
@@ -81,8 +54,8 @@ export default function AuthForm({ mode }: AuthFormProps) {
       setIsSubmitting(false);
     }
   }
-    
-  if (isCheckingAuth) {
+
+  if (loading || isAuthenticated) {
     return <AuthLoading />;
   }
 
@@ -181,9 +154,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
               </p>
 
               <h2 className="text-4xl font-normal tracking-[-0.045em] sm:text-5xl">
-                {isSignUp
-                  ? "Create your account."
-                  : "Good to see you."}
+                {isSignUp ? "Create your account." : "Good to see you."}
               </h2>
 
               <p className="mt-4 text-sm leading-6 text-[#54483f]/65">
@@ -256,9 +227,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
                       isSignUp ? "new-password" : "current-password"
                     }
                     placeholder={
-                      isSignUp
-                        ? "Create a password"
-                        : "Enter your password"
+                      isSignUp ? "Create a password" : "Enter your password"
                     }
                     minLength={isSignUp ? 8 : undefined}
                     required
@@ -268,13 +237,14 @@ export default function AuthForm({ mode }: AuthFormProps) {
                   <button
                     type="button"
                     onClick={() => setShowPassword((current) => !current)}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
                     aria-pressed={showPassword}
                     className="absolute right-4 top-1/2 -translate-y-1/2 text-[#54483f]/45 transition hover:text-[#54483f]"
                   >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
-
                 </div>
 
                 {isSignUp && (
@@ -316,10 +286,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
 
             {/* Link to the other auth page */}
             <p className="mt-8 text-center text-sm text-[#54483f]/60">
-              {isSignUp
-                ? "Already have an account?"
-                : "New to MementoCloud?"}{" "}
-
+              {isSignUp ? "Already have an account?" : "New to MementoCloud?"}{" "}
               <Link
                 href={isSignUp ? "/login" : "/signup"}
                 className="font-medium text-[#5f6f62] transition hover:underline"
@@ -331,8 +298,8 @@ export default function AuthForm({ mode }: AuthFormProps) {
             {/* Footer */}
             <div className="mt-10 border-t border-[#54483f]/10 pt-5 text-center">
               <p className="text-xs leading-5 text-[#54483f]/45">
-                Your memories, your space. Guests can still upload to your
-                event without creating an account.
+                Your memories, your space. Guests can still upload to your event
+                without creating an account.
               </p>
             </div>
           </div>
