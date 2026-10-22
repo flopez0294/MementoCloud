@@ -1,9 +1,17 @@
+
 "use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { getEvents, type Event } from "@/lib/events";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import CreateEventPopUp from "@/components/CreateEventPopUp";
+import {
+  createEvent,
+  getEvents,
+  type CreateEventData,
+  type Event,
+} from "@/lib/events";
 import {
   ArrowRight,
   CalendarDays,
@@ -79,6 +87,7 @@ function SectionHeading({
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { logout } = useAuth();
 
   const [events, setEvents] = useState<Event[]>([]);
@@ -86,6 +95,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [createPopUpOpen, setCreatePopUpOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -126,10 +136,25 @@ export default function DashboardPage() {
 
   const sortedEvents = useMemo(
     () =>
-      [...events].sort((a, b) =>
-        b.event_date.localeCompare(a.event_date),
-      ),
-    [events],
+      [...events].sort((a, b) => {
+        const dateA = a.event_date.slice(0, 10);
+        const dateB = b.event_date.slice(0, 10);
+
+        const aIsUpcoming = dateA >= today;
+        const bIsUpcoming = dateB >= today;
+
+        // Upcoming events first, nearest date at the top.
+        if (aIsUpcoming !== bIsUpcoming) {
+          return aIsUpcoming ? -1 : 1;
+        }
+
+        // Upcoming: earliest to latest.
+        // Past: most recent to oldest.
+        return aIsUpcoming
+          ? dateA.localeCompare(dateB)
+          : dateB.localeCompare(dateA);
+      }),
+    [events, today],
   );
 
   const upcomingCount = events.filter(
@@ -140,8 +165,14 @@ export default function DashboardPage() {
 
   const navigation = [
     { label: "Overview", href: "/dashboard", icon: Cloud },
-    { label: "Create an event", href: "/create", icon: Plus },
   ];
+
+  async function handleCreateEvent(data: CreateEventData) {
+    const event = await createEvent(data);
+
+    setCreatePopUpOpen(false);
+    router.push(`/dashboard/events/${event.search_id}`);
+  }
 
   return (
     <main className="min-h-screen bg-[#f5f0e8] text-[#3f3934]">
@@ -246,13 +277,14 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <Link
-            href="/create"
+          <button
+            type="button"
+            onClick={() => setCreatePopUpOpen(true)}
             className="inline-flex items-center gap-2 rounded-full bg-[#5f6f62] px-4 py-2.5 text-sm font-medium text-[#f5f0e8] transition hover:-translate-y-0.5 hover:bg-[#4f6053]"
           >
             <Plus size={16} />
             <span className="hidden sm:inline">Create event</span>
-          </Link>
+          </button>
         </header>
 
         <div className="mx-auto max-w-[1440px] px-5 py-9 sm:px-8 sm:py-12 lg:px-10 lg:py-14">
@@ -279,7 +311,7 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          {/* Event gallery */}
+          {/* Event list */}
           <section className="mb-16">
             <SectionHeading
               eyebrow="Your collection"
@@ -290,15 +322,20 @@ export default function DashboardPage() {
 
             {loading ? (
               <div
-                className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3"
+                className="divide-y divide-[#54483f]/10 border-y border-[#54483f]/10"
                 aria-label="Loading albums"
                 aria-live="polite"
               >
                 {[1, 2, 3].map((item) => (
-                  <div key={item} className="animate-pulse">
-                    <div className="aspect-[1.15/0.85] rounded-sm bg-[#c9c1b8]/40" />
-                    <div className="mt-4 h-4 w-2/3 bg-[#c9c1b8]/40" />
-                    <div className="mt-3 h-3 w-1/3 bg-[#c9c1b8]/30" />
+                  <div
+                    key={item}
+                    className="flex animate-pulse items-center gap-5 py-5"
+                  >
+                    <div className="h-14 w-14 shrink-0 rounded-full bg-[#c9c1b8]/40" />
+                    <div className="flex-1">
+                      <div className="h-4 w-1/3 bg-[#c9c1b8]/40" />
+                      <div className="mt-3 h-3 w-1/4 bg-[#c9c1b8]/30" />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -338,68 +375,75 @@ export default function DashboardPage() {
                   share their photos and videos.
                 </p>
 
-                <Link
-                  href="/create"
+                <button
+                  type="button"
+                  onClick={() => setCreatePopUpOpen(true)}
                   className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#5f6f62] px-6 py-3 text-sm text-[#f5f0e8] transition hover:-translate-y-0.5 hover:bg-[#4f6053]"
                 >
                   Create your first event <ArrowRight size={15} />
-                </Link>
+                </button>
               </div>
             ) : (
-              <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="divide-y divide-[#54483f]/15 border-y border-[#54483f]/15">
                 {sortedEvents.map((event) => {
                   const upcoming = event.event_date.slice(0, 10) >= today;
 
                   return (
-                    <article key={event.id} className="group min-w-0">
-                      <Link
-                        href={`/dashboard/events/${event.search_id}`}
-                        className="relative flex aspect-[1.15/0.85] flex-col justify-between overflow-hidden border border-[#54483f]/10 bg-[#e6e4d9] p-5 transition-colors duration-300 hover:bg-[#dedfd2] sm:p-6"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <span className="inline-flex items-center gap-2 rounded-full bg-[#f5f0e8]/80 px-3 py-1.5 text-[10px] uppercase tracking-[0.15em] text-[#54483f]">
-                            <span
-                              className={`h-1.5 w-1.5 rounded-full ${
-                                upcoming ? "bg-[#5f6f62]" : "bg-[#9b9a86]"
-                              }`}
-                            />
-                            {upcoming ? "Upcoming" : "Past event"}
-                          </span>
-
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#54483f]/20 transition group-hover:bg-[#5f6f62] group-hover:text-[#f5f0e8]">
-                            <ArrowRight size={16} />
-                          </span>
-                        </div>
-
-                        <div>
-                          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-[#5f6f62]/25 text-[#5f6f62]">
-                            <ImageIcon size={22} strokeWidth={1.4} />
-                          </div>
-
-                          <p className="text-xs text-[#54483f]/60">
-                            {formatEventDate(event.event_date)}
-                          </p>
-
-                          <h3 className="mt-1 break-words text-xl font-normal tracking-tight sm:text-2xl">
-                            {event.event_name}
-                          </h3>
-                        </div>
-                      </Link>
-
-                      <div className="flex items-center justify-between gap-3 border-b border-[#54483f]/15 py-4">
-                        <div className="flex items-center gap-2 text-xs text-[#54483f]/55">
-                          <Lock size={13} />
-                          Private album
-                        </div>
-
-                        <Link
-                          href={`/dashboard/events/${event.search_id}`}
-                          className="inline-flex items-center gap-1 text-xs font-medium text-[#5f6f62] transition hover:gap-2"
-                        >
-                          Open album <ChevronRight size={14} />
-                        </Link>
+                    <Link
+                      key={event.id}
+                      href={`/dashboard/events/${event.search_id}`}
+                      className="group flex flex-col gap-4 py-5 transition-colors hover:bg-[#faf7f1]/70 sm:flex-row sm:items-center sm:gap-6 sm:px-4"
+                    >
+                      {/* Event icon */}
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#e6e4d9] text-[#5f6f62] transition-colors group-hover:bg-[#dce0d5]">
+                        <ImageIcon size={23} strokeWidth={1.4} />
                       </div>
-                    </article>
+
+                      {/* Event name and date */}
+                      <div className="min-w-0 flex-1">
+                        <h3 className="break-words text-lg font-medium tracking-tight text-[#3f3934] transition-colors group-hover:text-[#5f6f62]">
+                          {event.event_name}
+                        </h3>
+
+                        <p className="mt-1 flex items-center gap-2 text-sm text-[#54483f]/60">
+                          <CalendarDays size={14} />
+                          {formatEventDate(event.event_date)}
+                        </p>
+                      </div>
+
+                      {/* Status and privacy */}
+                      <div className="flex flex-wrap items-center gap-3 sm:gap-5">
+                        <span
+                          className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] ${
+                            upcoming
+                              ? "bg-[#e2e5db] text-[#5f6f62]"
+                              : "bg-[#e6e4d9] text-[#54483f]/60"
+                          }`}
+                        >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${
+                              upcoming
+                                ? "bg-[#5f6f62]"
+                                : "bg-[#9b9a86]"
+                            }`}
+                          />
+                          {upcoming ? "Upcoming" : "Past event"}
+                        </span>
+
+                        <span className="inline-flex items-center gap-1.5 text-xs text-[#54483f]/50">
+                          <Lock size={13} />
+                          Private
+                        </span>
+                      </div>
+
+                      {/* Open album */}
+                      <div className="flex shrink-0 items-center gap-2 text-sm font-medium text-[#5f6f62] transition-all group-hover:gap-3">
+                        Open album
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full border border-[#54483f]/15 transition-colors group-hover:border-[#5f6f62] group-hover:bg-[#5f6f62] group-hover:text-[#f5f0e8]">
+                          <ChevronRight size={17} />
+                        </span>
+                      </div>
+                    </Link>
                   );
                 })}
               </div>
@@ -426,12 +470,13 @@ export default function DashboardPage() {
                   in one private space.
                 </p>
 
-                <Link
-                  href="/create"
+                <button
+                  type="button"
+                  onClick={() => setCreatePopUpOpen(true)}
                   className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#5f6f62] px-6 py-3 text-sm font-medium text-[#f5f0e8] transition hover:-translate-y-0.5 hover:bg-[#4f6053]"
                 >
                   Create an event <ArrowRight size={15} />
-                </Link>
+                </button>
               </div>
             </section>
           )}
@@ -486,6 +531,13 @@ export default function DashboardPage() {
           </footer>
         </div>
       </div>
+
+      {createPopUpOpen && (
+        <CreateEventPopUp
+          onClose={() => setCreatePopUpOpen(false)}
+          onCreate={handleCreateEvent}
+        />
+      )}
     </main>
   );
 }
