@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
-import { ArrowUpRight, ArrowRight, Clock2, Cloud, ChevronRight, Lock } from "lucide-react";
+import { ArrowUpRight, ArrowRight, Clock2, Cloud, ChevronRight, ImagePlus, Lock, ShieldCheck } from "lucide-react";
 
 const features = [
   {
@@ -232,7 +232,7 @@ export default function Home() {
 
 
           {/* Phone */}
-
+{/*
           <div className="relative flex justify-center">
 
             <div className="absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#c9c1b8]/45 sm:h-96 sm:w-96 lg:h-104 lg:w-104 xl:h-120 xl:w-120" />
@@ -242,7 +242,7 @@ export default function Home() {
               <div className="aspect-9/19 bg-white">
 
                 {/* Phone header image */}
-
+{/*}
                 <div
                   className="h-[38%] bg-cover bg-center"
                   style={{
@@ -271,7 +271,7 @@ export default function Home() {
 
 
                 {/* Tabs */}
-
+{/*
                 <div className="flex border-b border-[#54483f]/10 text-xs">
 
                   <span className="w-1/2 border-b-2 border-[#5f6f62] px-4 py-3 text-center font-medium">
@@ -286,7 +286,7 @@ export default function Home() {
 
 
                 {/* Gallery */}
-
+{/*
                 <div className="grid grid-cols-2 gap-1.5 p-2">
 
                   {galleryImages.map((image) => (
@@ -311,8 +311,119 @@ export default function Home() {
 
           </div>
 
-        </div>
+        </div> */}
+          {/* Phone — actual event page layout with example content */}
 
+          <div className="relative flex justify-center">
+            <div className="absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#c9c1b8]/45 sm:h-96 sm:w-96 lg:h-104 lg:w-104 xl:h-120 xl:w-120" />
+
+            <div className="relative z-10 w-64 overflow-hidden rounded-[2.7rem] border-[7px] border-[#54483f] bg-[#f5f0e8] shadow-[0_30px_70px_rgba(84,72,63,0.2)] sm:w-72 lg:w-76 xl:w-80">
+              {/* Phone screen */}
+              <div className="aspect-[9/19] overflow-y-auto bg-[#f5f0e8] [scrollbar-width:none]">
+                {/* Header */}
+                <header className="border-b border-[#c9c1b8]/50">
+                  <div className="flex items-center justify-between gap-1 px-2.5 py-3">
+                    <Link
+                      href="/"
+                      aria-label="MementoCloud home"
+                      className="flex min-w-0 flex-1 items-center gap-1.5 text-[14px] font-medium tracking-tight text-[#54483f]"
+                    >
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-[#54483f]">
+                        <Cloud className="h-4 w-4" />
+                      </span>
+
+                      <span className="whitespace-nowrap">MementoCloud</span>
+                    </Link>
+
+                    <span className="flex shrink-0 items-center gap-1 text-[9px] text-[#6d7565]">
+                      <ShieldCheck className="h-3 w-3 shrink-0" strokeWidth={1.7} />
+                      <span>Private album</span>
+                    </span>
+                  </div>
+                </header>
+                                
+
+                <div className="px-3 py-4">
+                  {/* Event heading */}
+                  <div className="mb-4">
+                    <p className="mb-1.5 text-[8px] font-medium uppercase tracking-[0.2em] text-[#5f6f62]">
+                      Event album
+                    </p>
+
+                    <h3 className="text-xl font-normal leading-tight tracking-tight">
+                      Alondra&apos;s Wedding
+                    </h3>
+
+                    <p className="mt-2 text-[9px] text-[#766b60]">
+                      April 16, 2021 · 6 memories
+                    </p>
+                  </div>
+
+                  {/* Upload section — visual preview */}
+                  <div className="mb-5 rounded-xl border border-[#c9c1b8]/60 bg-white/70 p-3">
+                    <div className="flex items-center gap-2">
+                      <div className="rounded-lg bg-[#e8eee6] p-2 text-[#5f6f62]">
+                        <ImagePlus size={14} />
+                      </div>
+
+                      <div>
+                        <p className="text-[10px] font-semibold">
+                          Share your photos
+                        </p>
+                        <p className="mt-0.5 text-[8px] leading-3 text-[#766b60]">
+                          Add your favorite moments to the album.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-[#b9c3b5] bg-white px-2 py-2 text-[9px] font-medium text-[#4d5b50]">
+                      <ImagePlus size={12} />
+                      Choose images
+                    </div>
+                  </div>
+
+                  {/* Gallery heading */}
+                  <div className="mb-3 flex items-end justify-between">
+                    <div>
+                      <p className="mb-1 text-[8px] font-medium uppercase tracking-[0.18em] text-[#5f6f62]">
+                        The collection
+                      </p>
+                      <h4 className="text-base font-normal tracking-tight">
+                        All memories
+                      </h4>
+                    </div>
+
+                    <span className="text-sm text-[#766b60] underline underline-offset-4">
+                      Refresh
+                    </span>
+                  </div>
+
+                  {/* Example wedding images */}
+                  <div className="columns-2 gap-1.5">
+                    {galleryImages.map((image, index) => (
+                      <div
+                        key={image}
+                        className="mb-1.5 break-inside-avoid overflow-hidden rounded-[2px] bg-[#e6e4d9]"
+                      >
+                        <img
+                          src={image}
+                          alt={`Wedding memory ${index + 1}`}
+                          loading="lazy"
+                          className="block h-auto w-full"
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="mt-4 border-t border-[#c9c1b8]/50 py-3 text-center text-[8px] text-[#8b8176]">
+                    Shared with love, kept private.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
 

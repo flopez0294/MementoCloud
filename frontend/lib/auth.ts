@@ -1,4 +1,8 @@
+import { UUID } from "crypto";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+// types
 
 export type AuthUser = {
   id: string;
@@ -18,6 +22,10 @@ type RegisterData = {
   password: string;
 };
 
+export type PasswordVerify = {
+  password: string;
+}
+
 function getApiUrl(): string {
   if (!API_URL) {
     throw new Error("The API URL is not configured.");
@@ -25,6 +33,8 @@ function getApiUrl(): string {
 
   return API_URL;
 }
+
+// User Auth
 
 export async function register(data: RegisterData): Promise<void> {
   const response = await fetch(`${getApiUrl()}/auth/register`, {
@@ -122,4 +132,44 @@ export async function getCurrentUser(
   }
 
   return response.json();
+}
+
+// Guest Auth
+
+export function getStorageKey(searchId: string) {
+  return `mementocloud_guest_${searchId}`;
+}
+
+export function getGuestToken(searchId: string): string | null {
+  return sessionStorage.getItem(getStorageKey(searchId))
+}
+
+export async function verifyEventPassword(searchId: string, data: PasswordVerify): Promise<AuthResponse> {
+  if (!searchId || searchId === "undefined") {
+    throw new Error("Missing event ID.");
+  }
+
+  try {
+    const response = await fetch(`${getApiUrl()}/api/event/${encodeURIComponent(searchId)}/verify`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result?.detail ?? "Password was not verified.");
+    }
+
+    return result as AuthResponse;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+
+    throw new Error("Unable to verify the event password.");
+  }
 }
