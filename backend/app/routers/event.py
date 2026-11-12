@@ -12,7 +12,7 @@ from app.db import Event, User, Media, get_async_session
 from app.users import current_active_user
 from app.schema import EventCreate, EventResponse, GuestTokenPayload, GuestEventResponse, PasswordVerify, PreSignedUrlRequest, UploadCompleteRequest
 from app.services.event_service import delete_event_data, delete_media_data, event_data, find_event
-from app.services.storage import create_storage_key, generate_put_presign_url, get_object_metadata, generate_get_presign_url, delete_object
+from app.services.storage import create_storage_key, generate_put_presign_url, get_object_metadata
 from app.services.guest import current_guest, create_guest_token
 from pwdlib import PasswordHash
 
@@ -528,7 +528,7 @@ async def get_owner_event(
         
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Failed to search event")
 
 @router.get("/{search_id}", response_model=GuestEventResponse, responses= {401: {"detail": "Invalid guest token"}, 404: {"detail": "Event not found"}, 405: {"detail": "Method Not Allowed"},500: {"detail": "Failed to search event"}})
@@ -575,7 +575,7 @@ async def get_search_event(
         return await event_data(event, session)
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Failed to search event")
         
 @router.delete("/{event_id}", responses={404: {"detail": "Event not found"}, 500: {"detail": "Failed to delete event media or event"}})
