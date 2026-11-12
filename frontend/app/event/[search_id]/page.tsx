@@ -87,7 +87,7 @@ export default function GuestEventPage() {
   } = useGuestAuth();
 
   const [password, setPassword] = useState("");
-  const [event, setEvent] = useState<GuestEventData | null>(null);
+  const [event, setEvent] = useState<EventData | null>(null);
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
