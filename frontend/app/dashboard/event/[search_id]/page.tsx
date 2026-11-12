@@ -113,9 +113,69 @@ export default function OwnerEventPage() {
     }
   }, [loading, isAuthenticated, router]);
 
+  // useEffect(() => {
+  //   void loadEvent();
+  // }, [loadEvent]);
+
   useEffect(() => {
-    void loadEvent();
-  }, [loadEvent]);
+    if (!searchId || loading || !isAuthenticated) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function fetchEvent() {
+      // Yield before updating state so the effect doesn't trigger
+      // synchronous state updates.
+      await Promise.resolve();
+
+      if (cancelled) return;
+
+      setIsLoading(true);
+      setError("");
+      setMessage("");
+
+      try {
+        const result = await getOwnerEvent(searchId);
+
+        if (cancelled) return;
+
+        setEvent(result.event);
+        setEventId(result.eventId);
+
+        const mediaUrls = Array.isArray(result.event.media)
+          ? result.event.media
+          : [];
+
+        const mediaIds = Array.isArray(result.event.media_ids)
+          ? result.event.media_ids
+          : [];
+
+        setGallery(
+          mediaUrls.map((url, index) => ({
+            url,
+            id: mediaIds[index] ?? "",
+          })),
+        );
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error ? err.message : "Could not load this event.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void fetchEvent();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchId, loading, isAuthenticated]);
 
   async function handleDelete(item: GalleryItem) {
     if (!eventId || !item.id) {
