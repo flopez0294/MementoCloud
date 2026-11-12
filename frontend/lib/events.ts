@@ -22,7 +22,7 @@ export type Event = {
   event_date: string;
 };
 
-export type GuestEventData = {
+export type EventData = {
   search_id: string;
   event_name: string;
   event_date: string;
@@ -32,6 +32,16 @@ export type GuestEventData = {
 
 type ApiErrorResponse = {
   detail?: string;
+};
+
+/**
+ * Event details returned by the authenticated owner endpoint.
+ */
+
+
+export type OwnerEventResult = {
+  event: EventData;
+  eventId: string;
 };
 
 function getApiUrl(): string {
@@ -123,7 +133,7 @@ export async function getEvents(): Promise<Event[]> {
 export async function getSearchEvent(
   search_id: string,
   guestToken: string
-): Promise<GuestEventData> {
+): Promise<EventData> {
   if (!search_id || search_id === "undefined") {
     throw new Error("A valid event ID is required.");
   }
@@ -152,7 +162,7 @@ export async function getSearchEvent(
     );
   }
 
-  return (await response.json()) as GuestEventData;
+  return (await response.json()) as EventData;
 }
 
 
@@ -380,4 +390,109 @@ export async function uploadGuestImages(
     uploadedCount,
     failedFiles,
   };
+}
+
+/**
+ * Retrieve an event and its media for the authenticated owner.
+ * Resolves the database event ID using the owner's event list.
+ */
+export async function getOwnerEvent(
+  searchId: string
+): Promise<OwnerEventResult> {
+  if (!searchId || searchId === "undefined") {
+    throw new Error("A valid event ID is required.");
+  }
+
+  const token = getAccessToken();
+
+  if (!token) {
+    throw new Error("You must be signed in to view this event.");
+  }
+
+  const [response, events] = await Promise.all([
+    fetch(
+      `${getApiUrl()}/api/event/${encodeURIComponent(searchId)}/owner`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
+      }
+    ),
+    getEvents(),
+  ]);
+
+  if (!response.ok) {
+    throw new Error(
+      await getErrorMessage(response, "Unable to load this event.")
+    );
+  }
+
+  const event = (await response.json()) as EventData;
+
+  const ownedEvent = events.find(
+    (item) => item.search_id === searchId
+  );
+
+  if (!ownedEvent) {
+    throw new Error("This event could not be found in your account.");
+  }
+
+  return {
+    event,
+    eventId: ownedEvent.id,
+  };
+}
+
+/**
+ * Delete one media item from an event owned by the signed-in host.
+ */
+export async function deleteEventMedia(
+  eventId: string,
+  mediaId: string
+): Promise<void> {
+  if (!eventId || !mediaId) {
+    throw new Error("The event ID and media ID are required.");
+  }
+
+  const token = getAccessToken();
+
+  if (!token) {
+    throw new Error("You must be signed in to delete a photo.");
+  }
+
+  const response = await fetch(
+    `${getApiUrl()}/api/event/${encodeURIComponent(eventId)}/media/${encodeURIComponent(mediaId)}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      await getErrorMessage(response, "Could not delete this photo.")
+    );
+  }
+}
+
+/**
+ * Fetch image bytes for ZIP generation.
+ *
+ * These are presigned R2 URLs, so the request does not need the host JWT.
+ * no-store prevents reuse of a cached response for the image request.
+ */
+export async function fetchMediaBlob(url: string): Promise<Blob> {
+  const response = await fetch(url, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Image download failed with HTTP ${response.status}.`);
+  }
+
+  return response.blob();
 }

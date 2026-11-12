@@ -171,7 +171,7 @@ export default function DashboardPage() {
     const event = await createEvent(data);
 
     setCreatePopUpOpen(false);
-    router.push(`/dashboard/events/${event.search_id}`);
+    router.push(`/dashboard/event/${event.search_id}`);
   }
 
   return (
@@ -316,8 +316,6 @@ export default function DashboardPage() {
             <SectionHeading
               eyebrow="Your collection"
               title="A place for every memory."
-              href="/dashboard/events"
-              linkLabel="All events"
             />
 
             {loading ? (
@@ -391,7 +389,7 @@ export default function DashboardPage() {
                   return (
                     <Link
                       key={event.id}
-                      href={`/dashboard/events/${event.search_id}`}
+                      href={`/dashboard/event/${event.search_id}`}
                       className="group flex flex-col gap-4 py-5 transition-colors hover:bg-[#faf7f1]/70 sm:flex-row sm:items-center sm:gap-6 sm:px-4"
                     >
                       {/* Event icon */}
