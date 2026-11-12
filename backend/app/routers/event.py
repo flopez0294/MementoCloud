@@ -320,7 +320,7 @@ async def upload_media(
         accepted_files = []
         rejected_files = []
 
-        allowed_image_types = {"image/jpeg", "image/jpg", "image/png", "image/webp", "image/svg+xml", "image/heic"}
+        allowed_image_types = {"image/jpeg", "image/jpg", "image/png", "image/webp", "image/svg+xml", "image/heic", "image/heif"}
         allowed_video_types = {"video/mp4", "video/quicktime", "video/webm", "video/x-matroska", "video/avi", "video/mpeg"}
 
         for file in payload.files:
