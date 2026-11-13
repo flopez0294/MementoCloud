@@ -33,7 +33,8 @@ jobs:
           DATABASE_URL: "sqlite+aiosqlite:///:memory:"
           FASTAPI_USERS_SECRET: Something_secret
           GUEST_SECRET: secret_Something
-          RESEND_API_KEY: "re_test_placeholder"
+          RESEND_API_KEY: re_test_placeholder
+          FRONTEND_URL: http://localhost:3000
 
       - name: Run linters
         run: uv run ruff check
