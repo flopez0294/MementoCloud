@@ -157,12 +157,6 @@ export default function DashboardPage() {
     [events, today],
   );
 
-  const upcomingCount = events.filter(
-    (event) => event.event_date.slice(0, 10) >= today,
-  ).length;
-
-  const pastCount = events.length - upcomingCount;
-
   const navigation = [
     { label: "Overview", href: "/dashboard", icon: Cloud },
   ];

@@ -1,5 +1,3 @@
-import { UUID } from "crypto";
-
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 // types

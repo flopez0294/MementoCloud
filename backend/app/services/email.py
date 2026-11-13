@@ -1,8 +1,6 @@
 import resend
-from uuid import UUID
 from resend.exceptions import ResendError
 from zoneinfo import ZoneInfo
-from dotenv import load_dotenv
 import os
 
 from app.db import Event, User
@@ -258,7 +256,7 @@ async def send_download_reminder(event: Event, user: User):
     }
 
     try:
-        email = resend.Emails.send(params)
+        resend.Emails.send(params)
         print(f"Email sent for event {event.id}")
 
     except ResendError as e:

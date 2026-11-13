@@ -1,9 +1,9 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from app.schema import UserCreate, UserRead, UserUpdate
-from app.users import auth_backend, current_active_user, fastapi_users
-from app.db import create_db_and_tables, User
+from app.users import auth_backend, fastapi_users
+from app.db import create_db_and_tables
 from app.routers import event
 from app.services.scheduler import scheduler
 from contextlib import asynccontextmanager
