@@ -36,7 +36,7 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 
 [tool.semantic_release]
-version_toml = ["pyproject.toml:project.version"]
+version_toml = ["backend/pyproject.toml:project.version"]
 branch = "main"
 tag_format = "v{version}"
 commit_message = "chore(release): {version} [skip ci]"
