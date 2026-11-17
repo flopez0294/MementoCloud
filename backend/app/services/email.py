@@ -4,11 +4,14 @@ from zoneinfo import ZoneInfo
 import os
 
 from app.db import Event, User
+from datetime import timezone
+
 
 
 
 resend_key = os.getenv("RESEND_API_KEY")
 base_url = os.getenv("FRONTEND_URL")
+email_from = os.getenv("EMAIL_FROM")
 
 if not resend_key:
     raise EnvironmentError("The RESEND_API_KEY environment variable is not given.")
@@ -38,188 +41,141 @@ async def send_download_reminder(event: Event, user: User):
     )
 
     event_timezone = ZoneInfo(event.timezone)
-    expires_at = event.delete_date.astimezone(event_timezone).strftime("%B %d, %Y at %I:%M %p")
-
-    html_body = f"""
+    delete_date = event.delete_date
+    if delete_date.tzinfo is None:
+        delete_date = delete_date.replace(tzinfo=timezone.utc)
+    expires_at = delete_date.astimezone(event_timezone).strftime("%B %d, %Y at %I:%M %p")
+    
+    html_body = f"""      
         <!DOCTYPE html>
-        <html>
+        <html lang="en">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Download Your Event Photos</title>
+            <title>Save Your Memories | MementoCloud</title>
         </head>
+        <body style="margin:0; padding:0; background-color:#f5f0e8; color:#54483f; font-family:Arial, Helvetica, sans-serif;">
 
-        <body style="
-            margin: 0;
-            padding: 0;
-            background-color: #f5f0e8;
-            font-family: Arial, Helvetica, sans-serif;
-            color: #54483f;
-        ">
-            <div style="
-                width: 100%;
-                padding: 40px 0;
-                background-color: #f5f0e8;
-            ">
-                <div style="
-                    max-width: 600px;
-                    margin: 0 auto;
-                    background-color: #ffffff;
-                    border: 1px solid #c9c1b8;
-                    border-radius: 12px;
-                    overflow: hidden;
-                ">
-
-                    <!-- Header -->
-                    <div style="
-                        padding: 28px 32px;
-                        background-color: #5f6f62;
-                        text-align: center;
-                    ">
-                        <h1 style="
-                            margin: 0;
-                            color: #ffffff;
-                            font-size: 26px;
-                            font-weight: 600;
-                        ">
-                            MementoCloud
-                        </h1>
-                    </div>
-
-                    <!-- Content -->
-                    <div style="padding: 32px;">
-
-                        <h2 style="
-                            margin: 0 0 16px 0;
-                            color: #54483f;
-                            font-size: 24px;
-                            font-weight: 600;
-                        ">
-                            Don't forget your memories!
-                        </h2>
-
-                        <p style="
-                            margin: 0 0 24px 0;
-                            color: #54483f;
-                            font-size: 16px;
-                            line-height: 1.6;
-                        ">
-                            Hello,
-                        </p>
-
-                        <p style="
-                            margin: 0 0 24px 0;
-                            color: #54483f;
-                            font-size: 16px;
-                            line-height: 1.6;
-                        ">
-                            This is a friendly reminder that your event
-                            <strong>{event.event_name}</strong> is coming up
-                            for deletion. Please download your memories before
-                            they expire.
-                        </p>
-
-                        <!-- Event Details -->
-                        <div style="
-                            margin: 24px 0;
-                            padding: 20px;
-                            background-color: #f5f0e8;
-                            border: 1px solid #c9c1b8;
-                            border-radius: 8px;
-                        ">
-                            <p style="
-                                margin: 0 0 10px 0;
-                                color: #54483f;
-                                font-size: 15px;
-                            ">
-                                <strong>Event:</strong> {event.event_name}
-                            </p>
-
-                            <p style="
-                                margin: 0 0 10px 0;
-                                color: #54483f;
-                                font-size: 15px;
-                            ">
-                                <strong>Date:</strong>
-                                {event.event_date.strftime("%B %d, %Y")}
-                            </p>
-
-                            <p style="
-                                margin: 0;
-                                color: #54483f;
-                                font-size: 15px;
-                            ">
-                                <strong>Photos & videos:</strong> {media_count}
-                            </p>
-                        </div>
-
-                        <p style="
-                            margin: 0 0 24px 0;
-                            color: #54483f;
-                            font-size: 16px;
-                            line-height: 1.6;
-                        ">
-                            Your files will be permanently deleted on
-                            <strong>{expires_at}</strong>.
-                        </p>
-
-                        <!-- CTA -->
-                        <div style="
-                            margin: 32px 0;
-                            text-align: center;
-                        ">
-                            <a href="{email_url}" style="
-                                display: inline-block;
-                                padding: 14px 28px;
-                                background-color: #5f6f62;
-                                color: #ffffff;
-                                text-decoration: none;
-                                border-radius: 6px;
-                                font-size: 16px;
-                                font-weight: 600;
-                            ">
-                                Download Your Memories
-                            </a>
-                        </div>
-
-                        <p style="
-                            margin: 0;
-                            color: #9b9a86;
-                            font-size: 14px;
-                            line-height: 1.6;
-                        ">
-                            Please make sure to save your photos and videos
-                            somewhere safe before the expiration date.
-                        </p>
-
-                    </div>
-
-                    <!-- Footer -->
-                    <div style="
-                        padding: 24px 32px;
-                        border-top: 1px solid #c9c1b8;
-                        background-color: #ffffff;
-                        text-align: center;
-                    ">
-                        <p style="
-                            margin: 0;
-                            color: #9b9a86;
-                            font-size: 13px;
-                        ">
-                            Thank you for using MementoCloud.
-                        </p>
-
-                        <p style="
-                            margin: 8px 0 0 0;
-                            color: #9b9a86;
-                            font-size: 13px;
-                        ">
-                            MementoCloud Team
-                        </p>
-                    </div>
-
-                </div>
+            <div style="display:none; max-height:0; overflow:hidden; opacity:0;">
+                Save your memories before your MementoCloud album expires.
             </div>
+
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f0e8;">
+                <tr>
+                    <td align="center" style="padding:40px 16px;">
+
+                        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%; max-width:600px; background-color:#faf7f1; border:1px solid #c9c1b8; border-radius:12px; overflow:hidden;">
+
+                            <tr>
+                                <td align="center" style="padding:32px 24px 28px;">
+                                    <h1 style="margin:0; color:#5f6f62; font-size:25px; font-weight:600; letter-spacing:-0.5px;">
+                                        MementoCloud
+                                    </h1>
+                                    <p style="margin:8px 0 0; color:#9b9a86; font-size:12px; letter-spacing:1.2px;">
+                                        REAL MOMENTS. LASTING MEMORIES.
+                                    </p>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td style="height:3px; background-color:#5f6f62; font-size:0; line-height:0;">&nbsp;</td>
+                            </tr>
+
+                            <tr>
+                                <td style="padding:36px 32px;">
+
+                                    <p style="margin:0 0 12px; color:#5f6f62; font-size:12px; font-weight:600; letter-spacing:1.5px;">
+                                        A LITTLE REMINDER
+                                    </p>
+
+                                    <h2 style="margin:0 0 18px; color:#54483f; font-size:30px; line-height:1.3; font-weight:600; letter-spacing:-0.6px;">
+                                        Your moments matter.
+                                    </h2>
+
+                                    <p style="margin:0 0 18px; font-size:16px; line-height:1.8;">
+                                        Hello,
+                                    </p>
+
+                                    <p style="margin:0 0 24px; font-size:16px; line-height:1.8;">
+                                        Every gathering holds memories worth keeping. Your album for
+                                        <strong>{event.event_name}</strong> will soon be permanently deleted.
+                                        Take a moment to save the media you want to keep.
+                                    </p>
+
+                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f0e8; border:1px solid #c9c1b8; border-radius:8px;">
+                                        <tr>
+                                            <td style="padding:24px;">
+
+                                                <p style="margin:0 0 18px; color:#9b9a86; font-size:12px; font-weight:600; letter-spacing:1.2px;">
+                                                    YOUR ALBUM
+                                                </p>
+
+                                                <p style="margin:0 0 16px; color:#54483f; font-size:18px; line-height:1.5; font-weight:600;">
+                                                    {event.event_name}
+                                                </p>
+
+                                                <p style="margin:0 0 12px; font-size:14px; line-height:1.7;">
+                                                    <span style="color:#9b9a86;">Event date</span><br>
+                                                    {event.event_date.strftime("%B %d, %Y")}
+                                                </p>
+
+                                                <p style="margin:0 0 12px; font-size:14px; line-height:1.7;">
+                                                    <span style="color:#9b9a86;">Photos and videos</span><br>
+                                                    {media_count}
+                                                </p>
+
+                                                <p style="margin:0; font-size:14px; line-height:1.7;">
+                                                    <span style="color:#9b9a86;">Permanent deletion</span><br>
+                                                    <strong>{expires_at}</strong>
+                                                </p>
+
+                                            </td>
+                                        </tr>
+                                    </table>
+
+                                    <p style="margin:24px 0; font-size:15px; line-height:1.8;">
+                                        MementoCloud albums are temporary by design. Download your memories before the deadline to keep them somewhere safe.
+                                    </p>
+
+                                    <table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0" style="margin:28px auto;">
+                                        <tr>
+                                            <td align="center" bgcolor="#5f6f62" style="border-radius:6px;">
+                                                <a href="{email_url}" target="_blank" style="display:inline-block; padding:15px 30px; color:#ffffff; font-size:15px; font-weight:600; text-decoration:none; border-radius:6px;">
+                                                    Save Your Memories
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    </table>
+
+                                    <p style="margin:0; color:#9b9a86; font-size:13px; line-height:1.8; text-align:center;">
+                                        Your memories stay private. Only you can manage your event album.
+                                    </p>
+
+                                    <p style="margin:24px 0 0; color:#9b9a86; font-size:12px; line-height:1.7; overflow-wrap:anywhere;">
+                                        Button not working? Copy this link into your browser:<br>
+                                        <a href="{email_url}" style="color:#5f6f62; text-decoration:underline;">{email_url}</a>
+                                    </p>
+
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td align="center" style="padding:24px; border-top:1px solid #c9c1b8; background-color:#f5f0e8;">
+                                    <p style="margin:0 0 8px; color:#54483f; font-size:14px; line-height:1.6;">
+                                        Shared with love, kept private.
+                                    </p>
+                                    <p style="margin:0; color:#9b9a86; font-size:12px;">
+                                        MementoCloud
+                                    </p>
+                                </td>
+                            </tr>
+
+                        </table>
+
+                    </td>
+                </tr>
+            </table>
+
         </body>
         </html>
     """
@@ -227,28 +183,27 @@ async def send_download_reminder(event: Event, user: User):
     text_body = f"""
         Hello!
 
-        This is a friendly reminder that your event "{event.event_name}" is
-        coming up for deletion.
+        We wanted to let you know that the memories from "{event.event_name}" are scheduled for permanent deletion soon.
 
         Event: {event.event_name}
-        Date: {event.event_date.strftime("%B %d, %Y")}
-        Photos & videos: {media_count}
+        Event date: {event.event_date.strftime("%B %d, %Y")}
+        Photos and videos saved: {media_count}
 
-        Your files will be permanently deleted on {expires_at}.
+        Deletion date: {expires_at}
 
-        Download your memories here:
+        To keep your memories, visit your event album and download your media:
         {email_url}
 
-        Please make sure to save your photos and videos somewhere safe before
-        the expiration date.
+        Once the deletion date passes, your media will no longer be available through MementoCloud. Please save anything you want to keep before then.
 
-        Thank you for using MementoCloud!
+        Thank you for trusting MementoCloud with your memories!
 
-        MementoCloud Team
+        MementoCloud
+        Your moments. Forever.
     """
 
     params: resend.Emails.SendParams = {
-        "from": "MementoCloud <onboarding@resend.dev>",
+        "from": f"MementoCloud <{email_from}>",
         "to": user.email,
         "subject": f"Reminder: Download your images for '{event.event_name}'",
         "html": html_body,
