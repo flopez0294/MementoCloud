@@ -2,8 +2,7 @@ name: Release and Publish MementoCloud
 
 on:
   workflow_dispatch:
-  pull_request:
-    types: [closed]
+  push:
     branches:
       - main
 
@@ -18,9 +17,7 @@ jobs:
   release:
     name: Create Release
     runs-on: self-hosted
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.pull_request.merged == true
+    if: github.event_name == 'push' ||github.event_name == 'workflow_dispatch'
 
     permissions:
       contents: write
