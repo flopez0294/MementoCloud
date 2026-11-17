@@ -26,6 +26,7 @@ import {
   uploadGuestImages,
   type EventData,
 } from "@/lib/events";
+import { createDisplayUrlFromRemote } from "@/lib/imageConverter";
 
 type GalleryItem = {
   id: string;
@@ -88,6 +89,7 @@ export default function GuestEventPage() {
   const [password, setPassword] = useState("");
   const [event, setEvent] = useState<EventData | null>(null);
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
+  const [displayGallery, setDisplayGallery] = useState<GalleryItem[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
   const [isSessionReady, setIsSessionReady] = useState(false);
@@ -184,6 +186,51 @@ export default function GuestEventPage() {
     guestSearchId,
     retryKey,
   ]);
+
+  // Convert HEIC images into browser-compatible display images.
+  useEffect(() => {
+    let cancelled = false;
+    const objectUrls: string[] = [];
+
+    async function prepareGallery() {
+      const results = await Promise.all(
+        gallery.map(async (item) => {
+          try {
+            const displayUrl = await createDisplayUrlFromRemote(item.url);
+
+            objectUrls.push(displayUrl);
+
+            return {
+              ...item,
+              url: displayUrl,
+            };
+          } catch (err) {
+            console.error(
+              `Failed to prepare display image ${item.id}:`,
+              err,
+            );
+
+            // Fall back to the original URL if conversion fails.
+            return item;
+          }
+        }),
+      );
+
+      if (cancelled) {
+        objectUrls.forEach((url) => URL.revokeObjectURL(url));
+        return;
+      }
+
+      setDisplayGallery(results);
+    }
+
+    void prepareGallery();
+
+    return () => {
+      cancelled = true;
+      objectUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [gallery]);
 
 
   async function handleVerifyPassword(e: FormEvent<HTMLFormElement>) {
@@ -610,7 +657,7 @@ export default function GuestEventPage() {
               gap={16}
               sx={{ margin: 0 }}
             >
-              {gallery.map((item) => (
+              {displayGallery.map((item) => (
                 <ImageListItem
                   key={item.id}
                   sx={{
