@@ -11,7 +11,6 @@ import {
   EyeOff,
   LockKeyhole,
   Mail,
-  UserRound,
 } from "lucide-react";
 
 type AuthMode = "signin" | "signup";

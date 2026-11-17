@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useCallback,
   useEffect,
   useRef,
   useState,
@@ -130,49 +129,62 @@ export default function GuestEventPage() {
   }, [searchId, restoreGuestSession]);
 
   // Fetch event details and refresh the gallery after uploads.
-  const loadEvent = useCallback(async () => {
-    if (!searchId || !guestToken || guestSearchId !== searchId) {
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
-    setError("");
-
-    try {
-      const data = await getSearchEvent(searchId, guestToken);
-
-      setEvent(data);
-
-      const mediaUrls = Array.isArray(data.media) ? data.media : [];
-      const mediaIds = Array.isArray(data.media_ids) ? data.media_ids : [];
-
-      setGallery(
-        mediaUrls.map((url, index) => ({
-          url,
-          id: mediaIds[index] ?? `${searchId}-${index}`,
-        })),
-      );
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not load this event.",
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, [searchId, guestToken, guestSearchId]);
-
   useEffect(() => {
-    if (!isSessionReady) return;
+    if (!isSessionReady || !isAuthenticated) return;
 
-    if (isAuthenticated) {
-      void loadEvent();
-    } else {
-      setIsLoading(false);
-      setEvent(null);
-      setGallery([]);
+    let cancelled = false;
+
+    async function fetchEvent() {
+      if (!searchId || !guestToken || guestSearchId !== searchId) {
+        return;
+      }
+
+      setIsLoading(true);
+      setError("");
+
+      try {
+        const data = await getSearchEvent(searchId, guestToken);
+
+        if (cancelled) return;
+
+        setEvent(data);
+
+        const mediaUrls = Array.isArray(data.media) ? data.media : [];
+        const mediaIds = Array.isArray(data.media_ids) ? data.media_ids : [];
+
+        setGallery(
+          mediaUrls.map((url, index) => ({
+            url,
+            id: mediaIds[index] ?? `${searchId}-${index}`,
+          })),
+        );
+      } catch (err) {
+        if (cancelled) return;
+
+        setError(
+          err instanceof Error ? err.message : "Could not load this event.",
+        );
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
     }
-  }, [isSessionReady, isAuthenticated, loadEvent, retryKey]);
+
+    void fetchEvent();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isSessionReady,
+    isAuthenticated,
+    searchId,
+    guestToken,
+    guestSearchId,
+    retryKey,
+  ]);
+
 
   async function handleVerifyPassword(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();

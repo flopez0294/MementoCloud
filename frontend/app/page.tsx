@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { ArrowUpRight, ArrowRight, Clock2, Cloud, ChevronRight, ImagePlus, Lock, ShieldCheck } from "lucide-react";
+import Image from "next/image";
 
 const features = [
   {
@@ -405,9 +406,11 @@ export default function Home() {
                         key={image}
                         className="mb-1.5 break-inside-avoid overflow-hidden rounded-[2px] bg-[#e6e4d9]"
                       >
-                        <img
+                        <Image
                           src={image}
                           alt={`Wedding memory ${index + 1}`}
+                          width={500}
+                          height={700}
                           loading="lazy"
                           className="block h-auto w-full"
                         />

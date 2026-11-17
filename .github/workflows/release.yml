@@ -1,0 +1,168 @@
+name: Release and Publish MementoCloud
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mementocloud-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: self-hosted
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.merged == true
+
+    permissions:
+      contents: write
+
+    outputs:
+      released: ${{ steps.release.outputs.released }}
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calculate version and create release
+        id: release
+        uses: python-semantic-release/python-semantic-release@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          config_file: backend/pyproject.toml
+          push: true
+
+      - name: Publish GitHub Release
+        if: steps.release.outputs.released == 'true'
+        uses: python-semantic-release/publish-action@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ steps.release.outputs.tag }}
+
+  docker-backend:
+    name: Build and Publish Backend
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: self-hosted
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout released version
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/mementocloud-backend:${{ needs.release.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/mementocloud-backend:${{ needs.release.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/mementocloud-backend:latest
+          cache-from: type=gha,scope=mementocloud-backend
+          cache-to: type=gha,mode=max,scope=mementocloud-backend
+
+  docker-frontend:
+    name: Build and Publish Frontend
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: self-hosted
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout released version
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/mementocloud-frontend:${{ needs.release.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/mementocloud-frontend:${{ needs.release.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/mementocloud-frontend:latest
+          cache-from: type=gha,scope=mementocloud-frontend
+          cache-to: type=gha,mode=max,scope=mementocloud-frontend
+  
+  deploy:
+    name: Deploy to Homelab 2
+    needs:
+      - release
+      - docker-backend
+      - docker-frontend
+    if: needs.release.outputs.released == 'true'
+    runs-on: self-hosted
+
+    steps:
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Configure SSH host verification
+        env:
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Pull and deploy released version
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          IMAGE_TAG: ${{ needs.release.outputs.version }}
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd /opt/mementocloud &&
+             IMAGE_TAG='$IMAGE_TAG' docker compose pull &&
+             IMAGE_TAG='$IMAGE_TAG' docker compose up -d --remove-orphans &&
+             docker compose ps"

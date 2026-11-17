@@ -7,7 +7,7 @@ from sqlalchemy import BigInteger, Column, Text, DateTime, Date, ForeignKey, Enu
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, relationship
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 import os
 
