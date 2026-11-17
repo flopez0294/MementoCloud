@@ -9,6 +9,7 @@ from app.db import Event, User
 
 resend_key = os.getenv("RESEND_API_KEY")
 base_url = os.getenv("FRONTEND_URL")
+email_from = os.getenv("EMAIL_FROM")
 
 if not resend_key:
     raise EnvironmentError("The RESEND_API_KEY environment variable is not given.")
@@ -248,7 +249,7 @@ async def send_download_reminder(event: Event, user: User):
     """
 
     params: resend.Emails.SendParams = {
-        "from": "MementoCloud <onboarding@resend.dev>",
+        "from": f"MementoCloud <{email_from}>",
         "to": user.email,
         "subject": f"Reminder: Download your images for '{event.event_name}'",
         "html": html_body,
