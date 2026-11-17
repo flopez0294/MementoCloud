@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v1.2.0 (2026-11-17)
+
+### Features
+
+- Add email reminder via domain email
+  ([`cda0f87`](https://github.com/flopez0294/MementoCloud/commit/cda0f875029ab075e3374ba79e7d5ff31effe4f4))
+
+- Update download reminder email template and plain-text body
+  ([`bf65b7f`](https://github.com/flopez0294/MementoCloud/commit/bf65b7ff50d051de959554b5a51b25f08ec1ed85))
+
+
 ## v1.1.1 (2026-11-17)
 
 ### Bug Fixes
