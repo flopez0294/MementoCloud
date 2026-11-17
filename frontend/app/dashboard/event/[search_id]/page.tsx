@@ -24,6 +24,7 @@ import {
   fetchMediaBlob,
   type EventData,
 } from "@/lib/events";
+import { createDisplayUrlFromRemote } from "@/lib/imageConverter"
 
 type GalleryItem = {
   id: string;
@@ -58,6 +59,7 @@ export default function OwnerEventPage() {
   const [event, setEvent] = useState<EventData | null>(null);
   const [eventId, setEventId] = useState<string | null>(null);
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
+  const [displayGallery, setDisplayGallery] = useState<GalleryItem[]>([]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -176,6 +178,44 @@ export default function OwnerEventPage() {
       cancelled = true;
     };
   }, [searchId, loading, isAuthenticated]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const objectUrls: string[] = [];
+
+    async function prepareGallery() {
+      const results = await Promise.all(
+        gallery.map(async (item) => {
+          try {
+            const displayUrl = await createDisplayUrlFromRemote(item.url);
+
+            if (displayUrl !== item.url) {
+              objectUrls.push(displayUrl);
+            }
+
+            return { ...item, url: displayUrl };
+          } catch {
+            // Fall back to the original URL if conversion fails.
+            return item;
+          }
+        }),
+      );
+
+      if (cancelled) {
+        objectUrls.forEach((url) => URL.revokeObjectURL(url));
+        return;
+      }
+
+      setDisplayGallery(results);
+    }
+
+    void prepareGallery();
+
+    return () => {
+      cancelled = true;
+      objectUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [gallery]);
 
   async function handleDelete(item: GalleryItem) {
     if (!eventId || !item.id) {
@@ -476,7 +516,7 @@ export default function OwnerEventPage() {
               gap={16}
               sx={{ margin: 0 }}
             >
-              {gallery.map((item, index) => (
+              {displayGallery.map((item, index) => (
                 <ImageListItem
                   key={item.id || `${item.url}-${index}`}
                   sx={{
