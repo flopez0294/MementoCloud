@@ -521,7 +521,7 @@ export default function Home() {
             </p>
 
             <Link
-              href="/create"
+              href="/signup"
               className="mt-8 inline-flex items-center justify-between rounded-full bg-[#f5f0e8] px-6 py-3.5 text-sm font-medium text-[#54483f] transition hover:-translate-y-1"
             >
               Get Started
