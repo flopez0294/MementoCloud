@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v1.2.1 (2026-11-19)
+
+### Bug Fixes
+
+- Get started now redirects to signup
+  ([`c4cd710`](https://github.com/flopez0294/MementoCloud/commit/c4cd71098c553a7c702e6ce4d20d4a4ff99211c0))
+
+- Sync uv lockfile with project dependencies
+  ([`a446734`](https://github.com/flopez0294/MementoCloud/commit/a446734aca5a1dfc6105e7fc7a23190d26fe584f))
+
+
 ## v1.2.0 (2026-11-17)
 
 ### Features
